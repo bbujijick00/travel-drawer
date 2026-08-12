@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>여행 서랍</title>
+<meta name="description" content="여행 위시리스트 & 방문 기록">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="여행 서랍">
+<meta name="theme-color" content="#faf7f2">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-app:#eceae4; --bg-screen:#faf7f2; --surface:#ffffff;
+    --sub1:#f8f2e9; --sub2:#f3ede4; --sub3:#f0e8dd;
+    --accent:#e8735a; --accent-hover:#d55f45; --accent-tint:#fbeee9; --accent-tint2:#f3d3ca;
+    --text-strong:#2b2724; --text-body:#4a4038; --text-secondary:#8a7c6b; --text-faint:#a89b8c; --text-fainter:#c3b6a5;
+    --status-open-bg:#e7f6ec; --status-open-fg:#1e9e57;
+    --status-changed-bg:#fff4e0; --status-changed-fg:#c98a12;
+    --status-closed-bg:#fdece9; --status-closed-fg:#d64b34;
+    --naver-green:#03c75a; --moved-green:#2b7a4b;
+    --border:#eee2d4; --border-alt:#ecdfce;
+    --warn-bg:#fff4e0; --warn-title:#8a6410; --warn-body:#a08a52;
+    --radius-card:18px; --radius-card-lg:20px; --radius-btn:14px; --radius-chip:20px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg-app);
+    font-family:"Noto Sans KR",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+    color:var(--text-body);
+    -webkit-font-smoothing:antialiased;
+    display:flex; justify-content:center;
+  }
+  #shell{
+    width:100%; max-width:430px; min-height:100vh;
+    background:var(--bg-screen);
+    position:relative;
+    overflow-x:hidden;
+  }
+  button{font-family:inherit; border:none; background:none; cursor:pointer; -webkit-tap-highlight-color:transparent;}
+  input,textarea{font-family:inherit; border:none; background:none; outline:none; color:var(--text-body); font-size:13px; width:100%;}
+  input::placeholder,textarea::placeholder{color:var(--text-fainter);}
+  a{color:inherit; text-decoration:none;}
+  h1,h2,h3,p{margin:0;}
+
+  .stripes{
+    background-color:var(--sub2);
+    background-image:repeating-linear-gradient(45deg, transparent 0 10px, rgba(43,39,36,.10) 10px 13px);
+  }
+
+  .screen{padding-bottom:96px;}
+  .pad{padding-left:22px; padding-right:22px;}
+
+  /* header */
+  .top-header{display:flex; align-items:flex-start; justify-content:space-between; padding:18px 22px 4px;}
+  .top-eyebrow{font-size:12px; color:var(--text-faint); margin-bottom:4px;}
+  .top-title{font-size:25px; font-weight:900; letter-spacing:-0.5px; color:var(--text-strong);}
+  .avatar{width:40px; height:40px; border-radius:14px; background:var(--sub3); display:flex; align-items:center; justify-content:center; font-size:16px; color:var(--text-faint); flex-shrink:0;}
+
+  /* tab toggle */
+  .tab-toggle{display:flex; padding:5px; gap:0; background:var(--sub3); border-radius:16px; margin:14px 22px 0;}
+  .tab-toggle button{flex:1; padding:10px 0; border-radius:12px; font-size:13px; font-weight:700; color:var(--text-faint); transition:background .15s;}
+  .tab-toggle button.active{background:var(--accent); color:#fff; box-shadow:0 4px 10px -3px rgba(232,115,90,.6);}
+
+  /* all banner */
+  .all-banner{margin:14px 22px 0; height:96px; border-radius:var(--radius-card-lg); position:relative; overflow:hidden; display:block; width:calc(100% - 44px);}
+  .all-banner .grad{position:absolute; inset:0; background:linear-gradient(90deg, rgba(43,39,36,.55), rgba(43,39,36,.08));}
+  .all-banner .content{position:absolute; inset:0; display:flex; align-items:center; justify-content:space-between; padding:0 18px; color:#fff;}
+  .all-banner .content h3{font-size:17px; font-weight:900;}
+  .all-banner .content p{font-size:11px; color:rgba(255,255,255,.85); margin-top:3px;}
+  .all-banner .chev{font-size:20px;}
+
+  /* folder grid */
+  .folder-grid{display:grid; grid-template-columns:1fr 1fr; gap:11px; margin:14px 22px 0;}
+  .folder-card{background:var(--surface); border-radius:var(--radius-card); padding:14px; text-align:left; box-shadow:0 6px 16px -10px rgba(43,39,36,.35); border:1.5px solid transparent;}
+  .folder-card.highlight{border-color:var(--accent-tint);}
+  .folder-card .row{display:flex; align-items:flex-start; justify-content:space-between;}
+  .folder-icon{width:38px; height:38px; border-radius:12px; background:var(--sub2); display:flex; align-items:center; justify-content:center; font-size:18px;}
+  .folder-card.highlight .folder-icon{background:var(--accent-tint);}
+  .folder-count{font-size:19px; font-weight:900; color:var(--text-strong);}
+  .folder-card.highlight .folder-count{color:var(--accent);}
+  .folder-label{font-size:13.5px; font-weight:700; color:var(--text-strong); margin-top:10px;}
+
+  /* list header */
+  .list-header{display:flex; align-items:flex-start; justify-content:space-between; padding:18px 22px 0;}
+  .list-header .left{display:flex; gap:10px; align-items:center;}
+  .list-icon{width:34px; height:34px; border-radius:11px; background:var(--sub2); display:flex; align-items:center; justify-content:center; font-size:17px; flex-shrink:0;}
+  .list-title{font-size:22px; font-weight:900; color:var(--text-strong);}
+  .list-sub{font-size:11px; color:var(--text-faint); margin-top:2px;}
+  .back-link{font-size:12px; font-weight:700; color:var(--text-faint); white-space:nowrap; padding-top:4px;}
+
+  .chip-row{display:flex; gap:7px; overflow-x:auto; padding:14px 22px 0; scrollbar-width:none;}
+  .chip-row::-webkit-scrollbar{display:none;}
+  .chip{padding:6px 12px; border-radius:var(--radius-chip); font-size:11.5px; font-weight:700; background:var(--sub3); color:var(--text-secondary); white-space:nowrap; flex-shrink:0;}
+  .chip.active{background:var(--accent); color:#fff;}
+
+  .place-list{display:flex; flex-direction:column; gap:12px; padding:14px 22px 0;}
+  .region-section{padding:0 22px; margin-top:18px;}
+  .region-section:first-of-type{margin-top:14px;}
+  .region-title{font-size:13px; font-weight:700; color:var(--text-secondary); margin-bottom:10px;}
+  .region-section .place-list{padding:0;}
+
+  .place-card{display:flex; gap:14px; background:var(--surface); border-radius:var(--radius-card-lg); padding:12px; box-shadow:0 6px 16px -10px rgba(43,39,36,.35); text-align:left; width:100%;}
+  .place-thumb{width:66px; height:66px; border-radius:16px; flex-shrink:0; background-size:cover; background-position:center;}
+  .place-info{flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;}
+  .place-name-row{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .place-name{font-size:15px; font-weight:700; color:var(--text-strong); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .place-region{font-size:11px; color:var(--text-faint); text-align:left;}
+  .place-status-row{display:flex; align-items:center; gap:6px;}
+  .checked-label{font-size:10px; color:var(--text-fainter);}
+
+  .badge{font-size:10px; font-weight:700; padding:3px 8px; border-radius:8px; flex-shrink:0;}
+  .badge.open{background:var(--status-open-bg); color:var(--status-open-fg);}
+  .badge.changed{background:var(--status-changed-bg); color:var(--status-changed-fg);}
+  .badge.closed{background:var(--status-closed-bg); color:var(--status-closed-fg);}
+
+  .heart-btn{width:26px; height:26px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; border:1.5px solid transparent;}
+  .heart-btn.on{background:var(--accent); color:#fff; box-shadow:0 3px 8px -2px rgba(232,115,90,.6);}
+  .heart-btn.off{background:var(--surface); color:var(--text-fainter); border-color:var(--border-alt);}
+  .heart-btn.big{width:40px; height:40px; border-radius:13px; font-size:18px;}
+
+  /* detail */
+  .hero{height:250px; position:relative;}
+  .hero-topbar{position:absolute; top:0; left:0; right:0; padding:44px 16px 0; display:flex; justify-content:space-between;}
+  .circle-btn{width:34px; height:34px; border-radius:50%; background:rgba(255,255,255,.85); display:flex; align-items:center; justify-content:center; font-size:15px;}
+  .circle-btn.accent{color:var(--accent);}
+  .hero-counter{position:absolute; bottom:14px; right:16px; background:rgba(0,0,0,.45); color:#fff; font-size:11px; font-weight:600; padding:4px 10px; border-radius:20px;}
+  .gallery-row{display:flex; gap:8px; padding:12px 16px; background:var(--surface);}
+  .gallery-thumb{width:52px; height:52px; border-radius:10px; background-size:cover; background-position:center; position:relative; flex-shrink:0;}
+  .gallery-thumb.sel{box-shadow:0 0 0 2px var(--accent);}
+  .gallery-overflow{position:absolute; inset:0; background:rgba(0,0,0,.45); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; border-radius:10px;}
+  .title-block{display:flex; justify-content:space-between; align-items:flex-start; padding:16px 20px; background:var(--surface);}
+  .title-name{font-size:21px; font-weight:900; color:var(--text-strong);}
+  .title-sub{font-size:12px; color:var(--text-faint); margin-top:4px;}
+  .tags-row{display:flex; gap:6px; flex-wrap:wrap; padding:0 20px 14px; background:var(--surface);}
+  .tag-chip{font-size:10px; padding:3px 8px; border-radius:8px; background:var(--sub2); color:var(--text-secondary);}
+  .warn-banner{margin:14px 20px 0; background:var(--warn-bg); border-radius:14px; padding:14px;}
+  .warn-banner .head{display:flex; gap:8px;}
+  .warn-banner .title{font-size:12.5px; font-weight:700; color:var(--warn-title);}
+  .warn-banner .body{font-size:11.5px; color:var(--warn-body); margin-top:2px;}
+  .warn-actions{display:flex; gap:8px; margin-top:10px;}
+  .warn-actions button{flex:1; padding:9px 0; border-radius:10px; font-size:12px; font-weight:700; text-align:center;}
+  .warn-actions .primary{background:var(--naver-green); color:#fff;}
+  .warn-actions .secondary{background:var(--surface); color:var(--text-secondary); border:1px solid var(--border-alt);}
+  .info-rows{padding:18px 20px 0; display:flex; flex-direction:column; gap:10px;}
+  .info-row{display:flex; gap:12px; align-items:flex-start;}
+  .info-row .label{width:58px; flex-shrink:0; font-size:12.5px; color:var(--text-fainter);}
+  .info-row .value{font-size:12.5px; color:var(--text-body);}
+  .memo-block{padding:18px 20px 0;}
+  .memo-block .h{font-size:13px; font-weight:700; color:var(--text-strong); margin-bottom:8px;}
+  .memo-box{background:var(--sub1); border-radius:14px; padding:12px; font-size:12.5px; line-height:1.6; color:var(--text-body);}
+  .memo-box.empty{color:var(--text-fainter);}
+  .links-block{padding:18px 20px 0;}
+  .links-block .h{font-size:13px; font-weight:700; color:var(--text-strong); margin-bottom:8px;}
+  .link-row{display:flex; align-items:center; gap:10px; background:var(--sub1); border-radius:12px; padding:12px; margin-bottom:8px;}
+  .link-row .label{flex:1; font-size:12.5px; color:var(--text-body); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .link-row .chev{color:var(--text-fainter);}
+  .location-block{padding:18px 20px 24px;}
+  .location-block .h{font-size:13px; font-weight:700; color:var(--text-strong); margin-bottom:10px;}
+  .map-box{height:120px; border-radius:14px; position:relative; display:flex; align-items:center; justify-content:center;}
+  .map-box .pin{font-size:26px; color:var(--accent);}
+  .map-actions{display:flex; gap:8px; margin-top:10px;}
+  .naver-btn{flex:1; display:flex; align-items:center; justify-content:center; gap:8px; background:var(--naver-green); color:#fff; font-size:13px; font-weight:700; padding:12px 0; border-radius:var(--radius-btn);}
+  .naver-badge{width:20px; height:20px; border-radius:5px; background:#fff; color:var(--naver-green); font-size:12px; font-weight:900; display:flex; align-items:center; justify-content:center;}
+  .compass-btn{width:46px; background:var(--sub3); color:var(--text-secondary); border-radius:var(--radius-btn); font-size:16px;}
+
+  .bottom-bar{position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:430px; padding:12px 20px calc(12px + env(safe-area-inset-bottom)); background:rgba(250,247,242,.94); backdrop-filter:blur(10px); border-top:1px solid var(--border); z-index:20;}
+  .bottom-bar button{width:100%; padding:14px 0; border-radius:var(--radius-btn); font-size:15px; font-weight:700; text-align:center;}
+  .bottom-bar .heart-on{background:var(--accent); color:#fff; box-shadow:0 8px 16px -6px rgba(232,115,90,.6);}
+  .bottom-bar .heart-off{background:var(--sub3); color:var(--text-secondary);}
+  .bottom-bar .move-btn{background:var(--moved-green); color:#fff; box-shadow:0 8px 16px -6px rgba(43,122,75,.5);}
+
+  /* add screen */
+  .add-header{display:flex; align-items:center; justify-content:space-between; height:52px; padding:0 22px; background:var(--bg-screen); border-bottom:1px solid var(--sub3); position:sticky; top:0; z-index:10;}
+  .add-header button{font-size:14px; font-weight:600;}
+  .add-header .cancel{color:var(--text-faint);}
+  .add-header .titlebar{font-size:14px; font-weight:900; color:var(--text-strong);}
+  .add-header .save{color:var(--accent); font-weight:900;}
+  .add-body{padding:18px 22px 40px; display:flex; flex-direction:column; gap:22px;}
+  .field-label{font-size:12px; font-weight:700; color:var(--text-secondary); margin-bottom:8px;}
+  .field-box{background:var(--surface); border-radius:12px; padding:12px;}
+  .photo-row{display:flex; gap:10px; overflow-x:auto; padding-bottom:2px;}
+  .photo-thumb{width:64px; height:64px; border-radius:12px; background-size:cover; background-position:center; position:relative; flex-shrink:0;}
+  .photo-badge{position:absolute; top:-6px; left:4px; background:var(--accent); color:#fff; font-size:9px; font-weight:700; padding:2px 6px; border-radius:20px;}
+  .photo-add{width:64px; height:64px; border-radius:12px; border:1.5px dashed var(--border-alt); display:flex; align-items:center; justify-content:center; color:var(--text-fainter); font-size:18px; flex-shrink:0;}
+  .cat-row{display:flex; gap:7px; flex-wrap:wrap;}
+  .region-field-row{display:flex; align-items:center; gap:8px;}
+  .region-field-row button{font-size:11px; font-weight:700; color:var(--text-secondary); white-space:nowrap;}
+  .link-add-row{display:flex; gap:8px; align-items:center; margin-top:8px;}
+  .link-add-row input{background:var(--sub1); border-radius:8px; padding:8px 10px; font-size:11.5px;}
+  .link-add-row button{color:var(--accent); font-weight:700; font-size:12px; flex-shrink:0;}
+  .removable-link{display:flex; align-items:center; gap:8px; margin-bottom:6px;}
+  .removable-link .txt{flex:1; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .removable-link button{color:var(--text-fainter); font-size:15px;}
+  .save-block{display:flex; flex-direction:column; align-items:center; gap:8px; margin-top:6px;}
+  .save-block .save-cta{width:100%; background:var(--accent); color:#fff; font-weight:900; font-size:15px; padding:14px 0; border-radius:var(--radius-btn); box-shadow:0 8px 16px -6px rgba(232,115,90,.6);}
+  .save-block .hint{font-size:11px; color:var(--text-faint);}
+
+  /* app-level tab bar */
+  .app-tabbar{position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:430px; height:74px; background:rgba(250,247,242,.92); backdrop-filter:blur(10px); border-top:1px solid var(--border); display:flex; align-items:flex-start; padding-top:10px; padding-bottom:calc(14px + env(safe-area-inset-bottom)); z-index:20;}
+  .tabbar-item{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--text-fainter); font-size:9px;}
+  .tabbar-item.active{color:var(--accent);}
+  .tabbar-item .ico{font-size:18px;}
+  .fab-wrap{flex:1; display:flex; justify-content:center;}
+  .fab{width:52px; height:52px; border-radius:18px; background:var(--accent); color:#fff; font-size:26px; display:flex; align-items:center; justify-content:center; margin-top:-18px; box-shadow:0 8px 18px -6px rgba(232,115,90,.7);}
+</style>
+</head>
+<body>
+<div id="shell"><div id="app"></div></div>
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "travel-drawer-v1";
+  var CATS = [
+    {key:"food", emoji:"🍜", label:"맛집"},
+    {key:"cafe", emoji:"☕", label:"카페"},
+    {key:"stay", emoji:"🛏", label:"숙소"},
+    {key:"sight", emoji:"🏛", label:"명소"}
+  ];
+  var STATUS_LABEL = {open:"영업중", changed:"정보 바뀜", closed:"폐업"};
+
+  function catMeta(key){ for (var i=0;i<CATS.length;i++){ if (CATS[i].key===key) return CATS[i]; } return CATS[0]; }
+  function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : "id-"+Date.now()+"-"+Math.random().toString(16).slice(2)); }
+
+  function formatChecked(iso){
+    if (!iso) return "확인 기록 없음";
+    var days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+    if (days < 1) return "오늘 확인";
+    if (days === 1) return "1일 전 확인";
+    return days + "일 전 확인";
+  }
+
+  function seedPlaces(){
+    var now = Date.now();
+    function days(n){ return new Date(now - n*86400000).toISOString(); }
+    return [
+      {id:uid(), tab:"visited", name:"온기정 냉면", category:"food", region:"서울 을지로",
+        photos:[], tags:["평양냉면","웨이팅있음"], links:[{icon:"📷", label:"인스타그램 게시물", url:"https://instagram.com"}],
+        status:"open", lastCheckedAt:days(3), sub:"노포 · 냉면 전문", addr:"서울 중구 을지로 123",
+        hours:"11:00 - 21:00 (매주 월요일 휴무)", access:"을지로3가역 4번 출구 도보 3분", visitDate:days(30),
+        memo:"육수가 슴슴하고 좋았음. 다음엔 회냉면도 먹어보기.", isHearted:true, createdAt:days(30)},
+      {id:uid(), tab:"visited", name:"낮잠 카페", category:"cafe", region:"서울 연남동",
+        photos:[], tags:["조용함","노트북가능"], links:[],
+        status:"changed", lastCheckedAt:days(40), sub:"루프탑 카페", addr:"서울 마포구 연남동 45-6",
+        hours:"10:00 - 22:00", access:"연남동 사거리에서 도보 5분", visitDate:days(60),
+        memo:"루프탑 자리 예약 추천.", isHearted:false, createdAt:days(60)},
+      {id:uid(), tab:"visited", name:"산책 게스트하우스", category:"stay", region:"강원 강릉",
+        photos:[], tags:["오션뷰","반려동물불가"], links:[],
+        status:"open", lastCheckedAt:days(10), sub:"게스트하우스", addr:"강원 강릉시 solongro 12",
+        hours:"체크인 15:00 / 체크아웃 11:00", access:"강릉역에서 택시 15분", visitDate:days(200),
+        memo:"", isHearted:true, createdAt:days(200)},
+      {id:uid(), tab:"wish", name:"구도심 전망대", category:"sight", region:"부산 중구",
+        photos:[], tags:["야경","무료"], links:[],
+        status:"open", lastCheckedAt:null, sub:"전망대", addr:"부산 중구 대청로 100",
+        hours:"09:00 - 21:00", access:"부산역에서 버스 15분", visitDate:null,
+        memo:"", isHearted:false, createdAt:days(1)},
+      {id:uid(), tab:"wish", name:"새벽 어시장 식당", category:"food", region:"부산 중구",
+        photos:[], tags:["회","새벽영업"], links:[],
+        status:"closed", lastCheckedAt:days(90), sub:"해산물", addr:"부산 중구 자갈치로 33",
+        hours:"확인 필요", access:"자갈치역 3번 출구", visitDate:null,
+        memo:"폐업했다는 리뷰 있음, 확인 필요.", isHearted:false, createdAt:days(1)},
+      {id:uid(), tab:"wish", name:"모래언덕 카페", category:"cafe", region:"제주 구좌읍",
+        photos:[], tags:["바다뷰"], links:[],
+        status:"open", lastCheckedAt:null, sub:"오션뷰 카페", addr:"제주 구좌읍 해맞이해안로 200",
+        hours:"10:00 - 19:00", access:"제주공항에서 차량 40분", visitDate:null,
+        memo:"", isHearted:false, createdAt:days(1)}
+    ];
+  }
+
+  function loadState(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    }catch(e){}
+    var fresh = {places: seedPlaces()};
+    saveState(fresh);
+    return fresh;
+  }
+  function saveState(s){
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }catch(e){ console.error("save failed", e); }
+  }
+
+  var state = loadState();
+  var nav = {tab:"wish", view:"folders", filter:{type:"all"}, selectedId:null, prevView:"folders", addTab:"wish"};
+
+  /* ---------- DOM helper ---------- */
+  function h(tag, attrs, children){
+    var node = document.createElement(tag);
+    attrs = attrs || {};
+    for (var k in attrs){
+      if (k === "class") node.className = attrs[k];
+      else if (k === "text") node.textContent = attrs[k];
+      else if (k === "html") node.innerHTML = attrs[k];
+      else if (k.indexOf("on") === 0 && typeof attrs[k] === "function") node.addEventListener(k.slice(2), attrs[k]);
+      else if (k === "style") Object.assign(node.style, attrs[k]);
+      else node.setAttribute(k, attrs[k]);
+    }
+    (children || []).forEach(function(c){
+      if (c == null) return;
+      node.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    });
+    return node;
+  }
+
+  function placesInTab(tab){ return state.places.filter(function(p){ return p.tab === tab; }); }
+
+  function persistAndRender(){ saveState(state); render(); }
+
+  /* ---------- shared components ---------- */
+  function tabToggle(current, onChange){
+    return h("div", {class:"tab-toggle"}, [
+      h("button", {class: current==="wish" ? "active" : "", text:"가보고 싶어", onclick:function(){ onChange("wish"); }}),
+      h("button", {class: current==="visited" ? "active" : "", text:"다녀왔어요", onclick:function(){ onChange("visited"); }})
+    ]);
+  }
+
+  function statusBadge(status){
+    return h("span", {class:"badge " + status, text: STATUS_LABEL[status]});
+  }
+
+  function heartButton(isOn, big, onToggle){
+    var btn = h("button", {class:"heart-btn " + (isOn?"on":"off") + (big?" big":""), text: isOn ? "♥" : "♡"});
+    btn.addEventListener("click", function(e){ e.stopPropagation(); onToggle(); });
+    return btn;
+  }
+
+  function thumbStyle(photos){
+    if (photos && photos.length) return {backgroundImage:"url("+photos[0]+")"};
+    return null;
+  }
+
+  function placeCard(p, showHeart){
+    var thumb = h("div", {class:"place-thumb stripes"});
+    var st = thumbStyle(p.photos);
+    if (st) Object.assign(thumb.style, st);
+
+    var nameRow = h("div", {class:"place-name-row"}, [
+      h("span", {class:"place-name", text:p.name})
+    ]);
+    if (showHeart){
+      nameRow.appendChild(heartButton(p.isHearted, false, function(){
+        p.isHearted = !p.isHearted;
+        persistAndRender();
+      }));
+    }
+
+    var info = h("div", {class:"place-info"}, [
+      nameRow,
+      h("div", {class:"place-region", text:"📍 " + p.region}),
+      h("div", {class:"place-status-row"}, [ statusBadge(p.status), h("span", {class:"checked-label", text: formatChecked(p.lastCheckedAt)}) ])
+    ]);
+
+    var card = h("button", {class:"place-card", onclick:function(){ openDetail(p.id); }}, [thumb, info]);
+    return card;
+  }
+
+  /* ---------- render dispatch ---------- */
+  function render(){
+    var app = document.getElementById("app");
+    app.innerHTML = "";
+    if (nav.view === "folders") app.appendChild(renderFolders());
+    else if (nav.view === "list") app.appendChild(renderList());
+    else if (nav.view === "detail") app.appendChild(renderDetail());
+    else if (nav.view === "add") app.appendChild(renderAdd());
+  }
+
+  /* ---------- folders screen ---------- */
+  function renderFolders(){
+    var inTab = placesInTab(nav.tab);
+    var tabLabel = nav.tab === "wish" ? "가보고 싶어" : "다녀왔어요";
+
+    var header = h("div", {class:"top-header"}, [
+      h("div", {}, [
+        h("div", {class:"top-eyebrow", text: tabLabel + " · " + inTab.length}),
+        h("h1", {class:"top-title", text:"나의 여행 서랍"})
+      ]),
+      h("div", {class:"avatar", text:"👤"})
+    ]);
+
+    var toggle = tabToggle(nav.tab, function(t){ nav.tab = t; nav.view = "folders"; nav.filter = {type:"all"}; render(); });
+
+    var banner = h("button", {class:"all-banner stripes", onclick:function(){ openList({type:"all"}); }}, [
+      h("div", {class:"grad"}),
+      h("div", {class:"content"}, [
+        h("div", {}, [
+          h("h3", {text:"전체 보기"}),
+          h("p", {text: tabLabel + " " + inTab.length + "곳 모두"})
+        ]),
+        h("span", {class:"chev", text:"›"})
+      ])
+    ]);
+
+    var folderDefs = [];
+    if (nav.tab === "visited") folderDefs.push({type:"again", emoji:"♥", label:"다시 가고 싶은", highlight:true});
+    CATS.forEach(function(c){ folderDefs.push({type:"category", value:c.key, emoji:c.emoji, label:c.label}); });
+    folderDefs.push({type:"region", emoji:"📍", label:"지역별"});
+
+    var grid = h("div", {class:"folder-grid"});
+    folderDefs.forEach(function(f){
+      var count;
+      if (f.type === "again") count = inTab.filter(function(p){ return p.isHearted; }).length;
+      else if (f.type === "category") count = inTab.filter(function(p){ return p.category === f.value; }).length;
+      else count = inTab.length;
+
+      var card = h("button", {class:"folder-card" + (f.highlight?" highlight":"")}, [
+        h("div", {class:"row"}, [
+          h("div", {class:"folder-icon", text:f.emoji}),
+          h("span", {class:"folder-count", text:String(count)})
+        ]),
+        h("div", {class:"folder-label", text:f.label})
+      ]);
+      card.addEventListener("click", function(){ openList({type:f.type, value:f.value}); });
+      grid.appendChild(card);
+    });
+
+    return h("div", {class:"screen"}, [header, toggle, banner, grid, appTabBar()]);
+  }
+
+  /* ---------- list screen ---------- */
+  function filterMeta(filter){
+    if (filter.type === "all") return {emoji:"🗂", title:"전체"};
+    if (filter.type === "again") return {emoji:"♥", title:"다시 가고 싶은"};
+    if (filter.type === "region") return {emoji:"📍", title:"지역별"};
+    var c = catMeta(filter.value);
+    return {emoji:c.emoji, title:c.label};
+  }
+
+  function filteredPlaces(){
+    var inTab = placesInTab(nav.tab);
+    var f = nav.filter;
+    if (f.type === "again") return inTab.filter(function(p){ return p.isHearted; });
+    if (f.type === "category") return inTab.filter(function(p){ return p.category === f.value; });
+    return inTab;
+  }
+
+  function renderList(){
+    var meta = filterMeta(nav.filter);
+    var list = filteredPlaces();
+    var showChips = nav.filter.type === "all" || nav.filter.type === "category";
+
+    var header = h("div", {class:"list-header"}, [
+      h("div", {class:"left"}, [
+        h("div", {class:"list-icon", text:meta.emoji}),
+        h("div", {}, [
+          h("div", {class:"list-title", text:meta.title}),
+          h("div", {class:"list-sub", text: list.length + "곳"})
+        ])
+      ]),
+      h("button", {class:"back-link", text:"‹ 종류", onclick:backToFolders})
+    ]);
+
+    var body = [header];
+
+    if (showChips){
+      var chipRow = h("div", {class:"chip-row"});
+      var allChip = h("button", {class:"chip" + (nav.filter.type==="all"?" active":""), text:"전체"});
+      allChip.addEventListener("click", function(){ nav.filter = {type:"all"}; render(); });
+      chipRow.appendChild(allChip);
+      CATS.forEach(function(c){
+        var active = nav.filter.type === "category" && nav.filter.value === c.key;
+        var chip = h("button", {class:"chip" + (active?" active":""), text:c.label});
+        chip.addEventListener("click", function(){ nav.filter = {type:"category", value:c.key}; render(); });
+        chipRow.appendChild(chip);
+      });
+      body.push(chipRow);
+    }
+
+    if (nav.filter.type === "region"){
+      var byRegion = {};
+      list.forEach(function(p){ (byRegion[p.region] = byRegion[p.region] || []).push(p); });
+      Object.keys(byRegion).sort().forEach(function(region){
+        var section = h("div", {class:"region-section"}, [
+          h("div", {class:"region-title", text:region})
+        ]);
+        var pl = h("div", {class:"place-list"});
+        byRegion[region].forEach(function(p){ pl.appendChild(placeCard(p, nav.tab==="visited")); });
+        section.appendChild(pl);
+        body.push(section);
+      });
+    } else {
+      var placeList = h("div", {class:"place-list"});
+      list.forEach(function(p){ placeList.appendChild(placeCard(p, nav.tab==="visited")); });
+      body.push(placeList);
+    }
+
+    body.push(appTabBar());
+    return h("div", {class:"screen"}, body);
+  }
+
+  function openList(filter){ nav.prevView = "folders"; nav.filter = filter; nav.view = "list"; render(); }
+  function backToFolders(){ nav.view = "folders"; render(); }
+
+  /* ---------- detail screen ---------- */
+  function findPlace(id){ return state.places.find(function(p){ return p.id === id; }); }
+
+  function openDetail(id){ nav.prevView = "list"; nav.selectedId = id; nav.view = "detail"; render(); }
+  function backFromDetail(){ nav.view = nav.prevView || "list"; render(); }
+
+  function renderDetail(){
+    var p = findPlace(nav.selectedId);
+    if (!p) { nav.view = "folders"; return renderFolders(); }
+    var photoCount = Math.max(p.photos.length, 1);
+
+    var hero = h("div", {class:"hero stripes"});
+    var heroStyle = thumbStyle(p.photos);
+    if (heroStyle) Object.assign(hero.style, heroStyle);
+    hero.appendChild(h("div", {class:"hero-topbar"}, [
+      h("button", {class:"circle-btn", text:"‹", onclick:backFromDetail}),
+      h("div", {style:{display:"flex", gap:"8px"}}, [
+        h("button", {class:"circle-btn accent", text:"↻", onclick:function(){ p.status="open"; p.lastCheckedAt=new Date().toISOString(); persistAndRender(); }}),
+        h("button", {class:"circle-btn", text:"⋯"})
+      ])
+    ]));
+    hero.appendChild(h("div", {class:"hero-counter", text:"1 / " + photoCount}));
+
+    var galleryRow = h("div", {class:"gallery-row"});
+    var shown = Math.min(photoCount, 4);
+    for (var i=0;i<shown;i++){
+      var t = h("div", {class:"gallery-thumb stripes" + (i===0?" sel":"")});
+      if (p.photos[i]) t.style.backgroundImage = "url(" + p.photos[i] + ")";
+      if (i === shown-1 && photoCount > 4) t.appendChild(h("div", {class:"gallery-overflow", text:"+" + (photoCount-4)}));
+      galleryRow.appendChild(t);
+    }
+
+    var titleBlock = h("div", {class:"title-block"}, [
+      h("div", {}, [
+        h("div", {class:"title-name", text:p.name}),
+        p.sub ? h("div", {class:"title-sub", text:p.sub}) : null
+      ])
+    ]);
+    if (p.tab === "visited"){
+      titleBlock.appendChild(heartButton(p.isHearted, true, function(){ p.isHearted = !p.isHearted; persistAndRender(); }));
+    }
+
+    var parts = [hero, galleryRow, titleBlock];
+
+    if (p.tags.length){
+      var tagsRow = h("div", {class:"tags-row"});
+      p.tags.forEach(function(tag){ tagsRow.appendChild(h("span", {class:"tag-chip", text:tag})); });
+      parts.push(tagsRow);
+    }
+
+    if (p.status !== "open"){
+      parts.push(h("div", {class:"warn-banner"}, [
+        h("div", {class:"head"}, [
+          h("span", {text:"⚠️"}),
+          h("div", {}, [
+            h("div", {class:"title", text:"저장 후 정보가 바뀌었을 수 있어요"}),
+            h("div", {class:"body", text: STATUS_LABEL[p.status] + " 상태로 확인됐어요. 최근 확인: " + formatChecked(p.lastCheckedAt)})
+          ])
+        ]),
+        h("div", {class:"warn-actions"}, [
+          h("button", {class:"primary", text:"↻ 지금 다시 확인", onclick:function(){ p.status="open"; p.lastCheckedAt=new Date().toISOString(); persistAndRender(); }}),
+          h("button", {class:"secondary", text:"최신 사진 보기"})
+        ])
+      ]));
+    }
+
+    var infoRows = h("div", {class:"info-rows"});
+    [["주소",p.addr], ["영업시간",p.hours], ["가는 법",p.access]].forEach(function(pair){
+      if (pair[1]) infoRows.appendChild(h("div", {class:"info-row"}, [ h("span",{class:"label",text:pair[0]}), h("span",{class:"value",text:pair[1]}) ]));
+    });
+    if (p.visitDate) infoRows.appendChild(h("div", {class:"info-row"}, [ h("span",{class:"label",text:"방문일"}), h("span",{class:"value",text:new Date(p.visitDate).toLocaleDateString("ko-KR")}) ]));
+    parts.push(infoRows);
+
+    parts.push(h("div", {class:"memo-block"}, [
+      h("div", {class:"h", text:"나의 메모"}),
+      h("div", {class:"memo-box" + (p.memo ? "" : " empty"), text: p.memo || "메모가 없어요"})
+    ]));
+
+    if (p.links.length){
+      var linksBlock = h("div", {class:"links-block"}, [h("div", {class:"h", text:"저장한 링크"})]);
+      p.links.forEach(function(l){
+        var row = h("a", {class:"link-row", href:l.url, target:"_blank", rel:"noopener"}, [
+          h("span", {text:l.icon}),
+          h("span", {class:"label", text:l.label || l.url}),
+          h("span", {class:"chev", text:"›"})
+        ]);
+        linksBlock.appendChild(row);
+      });
+      parts.push(linksBlock);
+    }
+
+    var query = encodeURIComponent(p.name + " " + p.region);
+    parts.push(h("div", {class:"location-block"}, [
+      h("div", {class:"h", text:"위치"}),
+      h("div", {class:"map-box stripes"}, [ h("span", {class:"pin", text:"📍"}) ]),
+      h("div", {class:"map-actions"}, [
+        h("a", {class:"naver-btn", href:"https://map.naver.com/v5/search/" + query, target:"_blank", rel:"noopener"}, [
+          h("span", {class:"naver-badge", text:"N"}),
+          h("span", {text:"네이버 지도로 열기"})
+        ]),
+        h("a", {class:"compass-btn", href:"https://maps.apple.com/?q=" + query, target:"_blank", rel:"noopener", style:{display:"flex",alignItems:"center",justifyContent:"center"}}, [
+          h("span", {text:"🧭"})
+        ])
+      ])
+    ]));
+
+    parts.push(h("div", {style:{height:"90px"}}));
+
+    var frag = h("div", {class:"screen"}, parts);
+
+    var bottomBar = h("div", {class:"bottom-bar"});
+    if (p.tab === "visited"){
+      var btn = h("button", {class: p.isHearted ? "heart-on" : "heart-off", text: p.isHearted ? "♥ 다시 가고 싶은 곳에 담김" : "♥ 다시 가고 싶은 곳에 담기"});
+      btn.addEventListener("click", function(){ p.isHearted = !p.isHearted; persistAndRender(); });
+      bottomBar.appendChild(btn);
+    } else {
+      var moveBtn = h("button", {class:"move-btn", text:"✓ 다녀왔어요로 옮기기"});
+      moveBtn.addEventListener("click", function(){ p.tab = "visited"; p.lastCheckedAt = new Date().toISOString(); persistAndRender(); });
+      bottomBar.appendChild(moveBtn);
+    }
+
+    var wrap = h("div", {}, [frag, bottomBar]);
+    return wrap;
+  }
+
+  /* ---------- add screen ---------- */
+  function openAdd(){ nav.addTab = nav.tab; nav.prevView = nav.view; nav.view = "add"; render(); }
+  function closeAdd(){ nav.view = nav.prevView || "folders"; render(); }
+
+  function compressImage(file){
+    return new Promise(function(resolve, reject){
+      var reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = function(){
+        var img = new Image();
+        img.onerror = reject;
+        img.onload = function(){
+          var maxDim = 960;
+          var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          var canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          var ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL("image/jpeg", 0.72));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function renderAdd(){
+    var draft = {
+      tab: nav.addTab, name:"", category:"food", region:"", tagsText:"", memo:"",
+      photos:[], links:[]
+    };
+
+    var header = h("div", {class:"add-header"}, [
+      h("button", {class:"cancel", text:"취소", onclick:closeAdd}),
+      h("div", {class:"titlebar", text:"새 장소"}),
+      h("button", {class:"save", text:"저장", onclick:function(){ doSave(); }})
+    ]);
+
+    var toggle = tabToggle(draft.tab, function(t){ draft.tab = t; renderToggleActive(); });
+    function renderToggleActive(){
+      Array.prototype.forEach.call(toggle.querySelectorAll("button"), function(btn, idx){
+        btn.classList.toggle("active", (idx===0 ? "wish" : "visited") === draft.tab);
+      });
+    }
+
+    // photos
+    var photoRow = h("div", {class:"photo-row"});
+    var fileInput = h("input", {type:"file", accept:"image/*", multiple:"multiple", style:{display:"none"}});
+    function renderPhotoRow(){
+      photoRow.innerHTML = "";
+      draft.photos.forEach(function(src, idx){
+        var t = h("div", {class:"photo-thumb", style:{backgroundImage:"url("+src+")"}});
+        if (idx === 0) t.appendChild(h("span", {class:"photo-badge", text:"대표"}));
+        photoRow.appendChild(t);
+      });
+      var addTile = h("div", {class:"photo-add", text:"+", onclick:function(){ fileInput.click(); }});
+      photoRow.appendChild(addTile);
+    }
+    renderPhotoRow();
+    fileInput.addEventListener("change", function(){
+      var files = Array.prototype.slice.call(fileInput.files || []);
+      Promise.all(files.map(compressImage)).then(function(list){
+        draft.photos = draft.photos.concat(list);
+        renderPhotoRow();
+      });
+      fileInput.value = "";
+    });
+    var photoBlock = h("div", {}, [
+      h("div", {class:"field-label", text:"사진 · 첫 장이 대표 사진"}),
+      photoRow, fileInput
+    ]);
+
+    // name
+    var nameInput = h("input", {type:"text", placeholder:"장소 이름을 입력해요", oninput:function(e){ draft.name = e.target.value; }});
+    var nameBlock = h("div", {}, [ h("div", {class:"field-label", text:"장소 이름"}), h("div", {class:"field-box"}, [nameInput]) ]);
+
+    // category
+    var catRow = h("div", {class:"cat-row"});
+    function renderCatRow(){
+      catRow.innerHTML = "";
+      CATS.forEach(function(c){
+        var chip = h("button", {class:"chip" + (draft.category===c.key?" active":""), text:c.emoji+" "+c.label});
+        chip.addEventListener("click", function(){ draft.category = c.key; renderCatRow(); });
+        catRow.appendChild(chip);
+      });
+    }
+    renderCatRow();
+    var catBlock = h("div", {}, [ h("div", {class:"field-label", text:"종류"}), h("div", {class:"field-box"}, [catRow]) ]);
+
+    // region
+    var regionInput = h("input", {type:"text", placeholder:"지역을 입력해요", oninput:function(e){ draft.region = e.target.value; }});
+    var regionBlock = h("div", {}, [ h("div", {class:"field-label", text:"지역"}), h("div", {class:"field-box region-field-row"}, [regionInput, h("button", {text:"📍 지도에서 찾기"})]) ]);
+
+    // tags
+    var tagsInput = h("input", {type:"text", placeholder:"쉼표로 구분해서 입력해요", oninput:function(e){ draft.tagsText = e.target.value; }});
+    var tagsBlock = h("div", {}, [ h("div", {class:"field-label", text:"태그"}), h("div", {class:"field-box"}, [tagsInput]) ]);
+
+    // links
+    var linksList = h("div", {});
+    var linkLabelInput = h("input", {type:"text", placeholder:"링크 이름"});
+    var linkURLInput = h("input", {type:"text", placeholder:"https://..."});
+    function renderLinksList(){
+      linksList.innerHTML = "";
+      draft.links.forEach(function(l, idx){
+        var row = h("div", {class:"removable-link"}, [
+          h("span", {class:"txt", text:"📝 " + (l.label || l.url)}),
+          h("button", {text:"✕", onclick:function(){ draft.links.splice(idx,1); renderLinksList(); }})
+        ]);
+        linksList.appendChild(row);
+      });
+    }
+    renderLinksList();
+    var addLinkBtn = h("button", {text:"추가", onclick:function(){
+      if (!linkURLInput.value) return;
+      draft.links.push({icon:"📝", label:linkLabelInput.value, url:linkURLInput.value});
+      linkLabelInput.value = ""; linkURLInput.value = "";
+      renderLinksList();
+    }});
+    var linksBlock = h("div", {}, [
+      h("div", {class:"field-label", text:"저장할 링크"}),
+      h("div", {class:"field-box"}, [ linksList, h("div", {class:"link-add-row"}, [linkLabelInput, linkURLInput, addLinkBtn]) ])
+    ]);
+
+    // memo
+    var memoInput = h("textarea", {rows:"3", placeholder:"메모를 남겨보세요", oninput:function(e){ draft.memo = e.target.value; }});
+    var memoBlock = h("div", {}, [ h("div", {class:"field-label", text:"메모"}), h("div", {class:"field-box"}, [memoInput]) ]);
+
+    function doSave(){
+      if (!draft.name.trim()) { nameInput.focus(); return; }
+      var tags = draft.tagsText.split(/[,\s]+/).map(function(s){return s.trim();}).filter(Boolean);
+      var place = {
+        id: uid(), tab: draft.tab, name: draft.name.trim(), category: draft.category, region: draft.region.trim(),
+        photos: draft.photos, tags: tags, links: draft.links,
+        status:"open", lastCheckedAt:null, sub:"", addr:"", hours:"", access:"", visitDate:null,
+        memo: draft.memo, isHearted:false, createdAt: new Date().toISOString()
+      };
+      state.places.push(place);
+      nav.tab = place.tab; nav.view = "folders"; nav.filter = {type:"all"};
+      persistAndRender();
+    }
+
+    var saveBlock = h("div", {class:"save-block"}, [
+      h("button", {class:"save-cta", text:"서랍에 저장하기", onclick:doSave}),
+      h("div", {class:"hint", text:"비워둔 항목은 나중에 채워도 돼요"})
+    ]);
+
+    var body = h("div", {class:"add-body"}, [
+      toggle, photoBlock, nameBlock, catBlock, regionBlock, tagsBlock, linksBlock, memoBlock, saveBlock
+    ]);
+
+    return h("div", {}, [header, body]);
+  }
+
+  /* ---------- app-level bottom tab bar ---------- */
+  function appTabBar(){
+    return h("div", {class:"app-tabbar"}, [
+      h("div", {class:"tabbar-item active"}, [ h("span",{class:"ico",text:"▭"}), h("span",{text:"서랍"}) ]),
+      h("div", {class:"tabbar-item"}, [ h("span",{class:"ico",text:"○"}), h("span",{text:"탐색"}) ]),
+      h("div", {class:"fab-wrap"}, [ h("button", {class:"fab", text:"+", onclick:openAdd}) ]),
+      h("div", {class:"tabbar-item"}, [ h("span",{class:"ico",text:"◇"}), h("span",{text:"지도"}) ]),
+      h("div", {class:"tabbar-item"}, [ h("span",{class:"ico",text:"○"}), h("span",{text:"나"}) ])
+    ]);
+  }
+
+  render();
+
+  if ("serviceWorker" in navigator) {
+    // no-op: static single-page app, offline handled by browser cache of this one file.
+  }
+})();
+</script>
+</body>
+</html>

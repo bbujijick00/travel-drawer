@@ -1,0 +1,12 @@
+{
+  "name": "여행 서랍",
+  "short_name": "여행서랍",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eceae4",
+  "theme_color": "#faf7f2",
+  "icons": [
+    { "src": "icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any maskable" }
+  ]
+}
