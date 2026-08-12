@@ -958,9 +958,14 @@
   }
 
   /* ---------- add / edit screen ---------- */
-  function openAdd(){ nav.editId = null; nav.addTab = nav.tab; nav.prevView = nav.view; nav.view = "add"; render(); }
-  function openEdit(id){ nav.editId = id; nav.prevView = nav.view; nav.view = "add"; render(); }
-  function closeAdd(){ nav.editId = null; nav.view = nav.prevView || "folders"; render(); }
+  /* formReturnView is deliberately separate from nav.prevView: opening add/edit
+     is a detour from whatever screen (folders/list/detail) was showing, and
+     must not clobber that screen's own "go back to" state (e.g. detail's
+     prevView pointing at "list" — overwriting it here previously left the
+     detail back-button/swipe stuck re-showing itself after an edit). */
+  function openAdd(){ nav.editId = null; nav.addTab = nav.tab; nav.formReturnView = nav.view; nav.view = "add"; render(); }
+  function openEdit(id){ nav.editId = id; nav.formReturnView = nav.view; nav.view = "add"; render(); }
+  function closeAdd(){ nav.editId = null; nav.view = nav.formReturnView || "folders"; render(); }
 
   function compressImage(file){
     return new Promise(function(resolve, reject){
@@ -1150,7 +1155,7 @@
         editing.hours = draft.hours.trim(); editing.access = draft.access.trim();
         editing.visitDate = visitDateISO; editing.memo = draft.memo; editing.status = draft.status;
         nav.editId = null;
-        nav.view = nav.prevView || "folders";
+        nav.view = nav.formReturnView || "folders";
         persistAndRender();
       } else {
         var place = {
