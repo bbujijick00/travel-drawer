@@ -1128,6 +1128,12 @@
 
     function doSave(){
       if (!draft.name.trim()) { nameInput.focus(); return; }
+      // a link typed but never confirmed with "추가" would otherwise be silently
+      // dropped — pick it up automatically so saving always includes it.
+      if (linkURLInput.value.trim()){
+        draft.links.push({icon:"📝", label:linkLabelInput.value.trim(), url:linkURLInput.value.trim()});
+        linkLabelInput.value = ""; linkURLInput.value = "";
+      }
       var tags = draft.tagsText.split(/[,\s]+/).map(function(s){return s.trim();}).filter(Boolean);
       var visitDateISO = draft.visitDate ? new Date(draft.visitDate + "T00:00:00").toISOString() : null;
 
