@@ -516,7 +516,13 @@
       h("button", {class:"circle-btn", text:"‹", onclick:backFromDetail}),
       h("div", {style:{display:"flex", gap:"8px"}}, [
         h("button", {class:"circle-btn accent", text:"↻", onclick:function(){ p.status="open"; p.lastCheckedAt=new Date().toISOString(); persistAndRender(); }}),
-        h("button", {class:"circle-btn", text:"⋯"})
+        h("button", {class:"circle-btn", text:"⋯", onclick:function(){
+          if (confirm("'" + p.name + "'을(를) 삭제할까요?\n삭제하면 되돌릴 수 없어요.")){
+            state.places = state.places.filter(function(x){ return x.id !== p.id; });
+            nav.view = "list";
+            persistAndRender();
+          }
+        }})
       ])
     ]));
     hero.appendChild(h("div", {class:"hero-counter", text:"1 / " + photoCount}));
