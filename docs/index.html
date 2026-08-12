@@ -206,23 +206,14 @@
 
   /* photo focus/position editor */
   .focus-overlay{position:fixed; inset:0; background:rgba(20,18,16,.75); display:flex; align-items:center; justify-content:center; z-index:200; padding:24px;}
-  .focus-card{background:var(--surface); border-radius:20px; padding:18px; width:100%; max-width:320px; display:flex; flex-direction:column; align-items:center; gap:14px;}
+  .focus-card{position:relative; background:var(--surface); border-radius:20px; padding:22px 18px 18px; width:100%; max-width:400px; display:flex; flex-direction:column; align-items:center; gap:14px;}
+  .focus-close{position:absolute; top:10px; right:10px; width:28px; height:28px; border-radius:50%; background:var(--sub2); color:var(--text-secondary); font-size:13px; display:flex; align-items:center; justify-content:center;}
   .focus-title{font-size:13px; font-weight:800; color:var(--text-strong);}
   .focus-frame{position:relative; max-width:100%; border-radius:16px; overflow:hidden; touch-action:none; cursor:grab; box-shadow:inset 0 0 0 1.5px var(--border-alt);}
   .focus-hint{font-size:11.5px; color:var(--text-faint); text-align:center;}
   .focus-zoom-row{display:flex; gap:10px;}
   .focus-zoom-btn{width:38px; height:38px; border-radius:50%; background:var(--sub2); color:var(--text-strong); font-size:18px; font-weight:800; display:flex; align-items:center; justify-content:center;}
   .focus-done{width:100%; background:var(--accent); color:#fff; font-weight:800; font-size:14px; padding:12px 0; border-radius:12px;}
-
-  /* full-screen photo viewer */
-  .lightbox-overlay{position:fixed; inset:0; background:rgba(10,9,8,.94); z-index:300; display:flex; align-items:center; justify-content:center; overflow:hidden;}
-  .lightbox-img{max-width:92vw; max-height:80vh; object-fit:contain; border-radius:6px; user-select:none; -webkit-user-drag:none;}
-  .lightbox-counter{position:absolute; bottom:calc(24px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); color:#fff; font-size:12.5px; font-weight:600; background:rgba(255,255,255,.16); padding:6px 14px; border-radius:20px;}
-  .lightbox-close{position:absolute; top:calc(16px + env(safe-area-inset-top)); right:16px; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,.16); color:#fff; font-size:15px;}
-  .lightbox-nav{position:absolute; top:50%; transform:translateY(-50%); width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,.16); color:#fff; font-size:22px; display:flex; align-items:center; justify-content:center;}
-  .lightbox-nav.prev{left:10px;}
-  .lightbox-nav.next{right:10px;}
-  .lightbox-nav.hidden{visibility:hidden;}
   .cat-row{display:flex; gap:7px; flex-wrap:wrap;}
   .region-field-row{display:flex; align-items:center; gap:8px;}
   .region-field-row button{font-size:11px; font-weight:700; color:var(--text-secondary); white-space:nowrap;}
@@ -358,52 +349,13 @@
     document.body.appendChild(overlay);
   }
 
-  /* Full-screen viewer for a place's photos, opened from the hero or any
-     gallery thumbnail. Swipe or use the arrow buttons to move between shots. */
-  function openLightbox(photos, startIndex){
-    if (!photos || !photos.length) return;
-    var idx = startIndex;
-    var overlay = h("div", {class:"lightbox-overlay"});
-    var img = h("img", {class:"lightbox-img", src:photos[idx].src, alt:"", draggable:"false"});
-    var counter = h("div", {class:"lightbox-counter", text:(idx+1) + " / " + photos.length});
-    var prevBtn = h("button", {class:"lightbox-nav prev", text:"‹"});
-    var nextBtn = h("button", {class:"lightbox-nav next", text:"›"});
-    var closeBtn = h("button", {class:"lightbox-close", text:"✕"});
-
-    function update(){
-      img.src = photos[idx].src;
-      counter.textContent = (idx+1) + " / " + photos.length;
-      prevBtn.classList.toggle("hidden", idx <= 0);
-      nextBtn.classList.toggle("hidden", idx >= photos.length - 1);
-    }
-    prevBtn.addEventListener("click", function(e){ e.stopPropagation(); if (idx > 0){ idx--; update(); } });
-    nextBtn.addEventListener("click", function(e){ e.stopPropagation(); if (idx < photos.length-1){ idx++; update(); } });
-    closeBtn.addEventListener("click", function(e){ e.stopPropagation(); document.body.removeChild(overlay); });
-    overlay.addEventListener("click", function(e){ if (e.target === overlay) document.body.removeChild(overlay); });
-
-    var startX = 0;
-    overlay.addEventListener("touchstart", function(e){ startX = e.touches[0].clientX; }, {passive:true});
-    overlay.addEventListener("touchend", function(e){
-      var dx = e.changedTouches[0].clientX - startX;
-      if (dx > 50 && idx > 0){ idx--; update(); }
-      else if (dx < -50 && idx < photos.length-1){ idx++; update(); }
-    });
-
-    overlay.appendChild(img);
-    overlay.appendChild(counter);
-    overlay.appendChild(prevBtn);
-    overlay.appendChild(nextBtn);
-    overlay.appendChild(closeBtn);
-    document.body.appendChild(overlay);
-    update();
-  }
-
   /* Crop/zoom editor. The frame matches the detail hero's wide ratio (not a
      square) so what you frame here is what actually shows up there — the
      previous square-preview version looked "wrong" once opened in detail
      because the hero crops to a totally different aspect ratio. */
   function openFocusEditor(photo, onDone){
-    var FW = 280, FH = 172; // ~16:10, matching the hero banner's shape
+    var FW = Math.min(340, window.innerWidth - 64);
+    var FH = Math.round(FW * (172/280)); // ~16:10, matching the hero banner's shape
 
     var overlay = h("div", {class:"focus-overlay"});
     var frame = h("div", {class:"focus-frame"});
@@ -412,10 +364,12 @@
     frame.style.width = FW + "px";
     frame.style.height = FH + "px";
 
+    var closeBtn = h("button", {class:"focus-close", text:"✕"});
     var zoomOutBtn = h("button", {class:"focus-zoom-btn", text:"−"});
     var zoomInBtn = h("button", {class:"focus-zoom-btn", text:"+"});
     var doneBtn = h("button", {class:"focus-done", text:"완료"});
     var card = h("div", {class:"focus-card"}, [
+      closeBtn,
       h("div", {class:"focus-title", text:"보여줄 부분 조정"}),
       frame,
       h("div", {class:"focus-hint", text:"드래그로 이동 · 손가락 두 개나 버튼으로 확대"}),
@@ -424,6 +378,8 @@
     ]);
     overlay.appendChild(card);
     document.body.appendChild(overlay);
+
+    closeBtn.addEventListener("click", function(){ document.body.removeChild(overlay); });
 
     var nw = 0, nh = 0, baseScale = 1, zoom = photo.zoom || 1, offX = 0, offY = 0;
 
@@ -843,23 +799,29 @@
         }})
       ])
     ]));
-    hero.appendChild(h("div", {class:"hero-counter", text:"1 / " + photoCount}));
-    if (p.photos.length){
-      hero.style.cursor = "pointer";
-      hero.addEventListener("click", function(){ openLightbox(p.photos, 0); });
-    }
+    var heroCounter = h("div", {class:"hero-counter", text:"1 / " + photoCount});
+    hero.appendChild(heroCounter);
 
     var galleryRow = h("div", {class:"gallery-row"});
     var shown = Math.min(photoCount, 4);
+    var thumbs = [];
     for (var i=0;i<shown;i++){
       var t = h("div", {class:"gallery-thumb stripes" + (i===0?" sel":"")});
       if (p.photos[i]) {
         t.style.backgroundImage = "url(" + p.photos[i].src + ")";
         t.style.backgroundPosition = p.photos[i].fx + "% " + p.photos[i].fy + "%";
         t.style.cursor = "pointer";
-        (function(idx){ t.addEventListener("click", function(){ openLightbox(p.photos, idx); }); })(i);
+        (function(idx){
+          t.addEventListener("click", function(){
+            heroCounter.textContent = (idx+1) + " / " + photoCount;
+            hero.style.backgroundImage = "url(" + p.photos[idx].src + ")";
+            hero.style.backgroundPosition = p.photos[idx].fx + "% " + p.photos[idx].fy + "%";
+            thumbs.forEach(function(th, thIdx){ th.classList.toggle("sel", thIdx === idx); });
+          });
+        })(i);
       }
       if (i === shown-1 && photoCount > 4) t.appendChild(h("div", {class:"gallery-overflow", text:"+" + (photoCount-4)}));
+      thumbs.push(t);
       galleryRow.appendChild(t);
     }
 
