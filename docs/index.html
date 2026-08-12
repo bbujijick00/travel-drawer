@@ -1021,7 +1021,7 @@
   render();
 
   if ("serviceWorker" in navigator) {
-    // no-op: static single-page app, offline handled by browser cache of this one file.
+    navigator.serviceWorker.register("sw.js").catch(function(){});
   }
 })();
 </script>
