@@ -299,10 +299,16 @@
     ];
   }
 
-  /* photos used to be plain dataURL strings; normalize old saves to {src,fx,fy}. */
+  /* photos used to be plain dataURL strings, then gained fx/fy; normalize old
+     saves to {src,nw,nh,fx,fy,zoom}. nw/nh (natural pixel size) may be missing
+     on older saves — applyPhotoBox() falls back to plain cover/center for
+     those until they're re-opened in the crop editor, which backfills them. */
   function normalizePhoto(ph){
-    if (typeof ph === "string") return {src: ph, fx:50, fy:50, zoom:1};
-    return {src: ph.src, fx: (ph.fx==null?50:ph.fx), fy: (ph.fy==null?50:ph.fy), zoom: (ph.zoom==null?1:ph.zoom)};
+    if (typeof ph === "string") return {src: ph, nw:null, nh:null, fx:50, fy:50, zoom:1};
+    return {
+      src: ph.src, nw: ph.nw||null, nh: ph.nh||null,
+      fx: (ph.fx==null?50:ph.fx), fy: (ph.fy==null?50:ph.fy), zoom: (ph.zoom==null?1:ph.zoom)
+    };
   }
   function normalizePlace(p){
     p.photos = (p.photos || []).map(normalizePhoto);
@@ -349,10 +355,13 @@
     document.body.appendChild(overlay);
   }
 
-  /* Crop/zoom editor. The frame matches the detail hero's wide ratio (not a
-     square) so what you frame here is what actually shows up there — the
-     previous square-preview version looked "wrong" once opened in detail
-     because the hero crops to a totally different aspect ratio. */
+  /* Crop/zoom editor. This never touches the saved pixels — "완료" just
+     records fx/fy (pan, as % of the pannable range) and zoom onto the photo.
+     applyPhotoBox() replays those same three numbers at render time for
+     every box (square thumbnails, the wide hero) via the cover+zoom formula,
+     so framing stays consistent everywhere and re-opening the editor later
+     always has the full original image to work with — nothing is ever
+     cropped away. */
   function openFocusEditor(photo, onDone){
     var FW = Math.min(340, window.innerWidth - 64);
     var FH = Math.round(FW * (172/280)); // ~16:10, matching the hero banner's shape
@@ -405,7 +414,6 @@
     }
 
     function initLayout(){
-      nw = img.naturalWidth; nh = img.naturalHeight;
       baseScale = Math.max(FW / nw, FH / nh);
       var dispW = nw * baseScale * zoom, dispH = nh * baseScale * zoom;
       if (photo.fx != null && (photo.fx !== 50 || photo.fy !== 50)){
@@ -416,8 +424,13 @@
       }
       layout();
     }
-    if (img.complete && img.naturalWidth) initLayout();
-    else img.addEventListener("load", initLayout);
+    if (photo.nw && photo.nh){
+      nw = photo.nw; nh = photo.nh; initLayout();
+    } else if (img.complete && img.naturalWidth){
+      nw = img.naturalWidth; nh = img.naturalHeight; initLayout();
+    } else {
+      img.addEventListener("load", function(){ nw = img.naturalWidth; nh = img.naturalHeight; initLayout(); });
+    }
 
     // one-finger / mouse drag to pan
     var dragging = false, lastX = 0, lastY = 0;
@@ -468,15 +481,11 @@
     zoomInBtn.addEventListener("click", function(){ zoomAt(zoom + 0.3, FW / 2, FH / 2); });
 
     doneBtn.addEventListener("click", function(){
-      var outW = 800, outH = Math.round(outW * (FH / FW));
-      var canvas = document.createElement("canvas");
-      canvas.width = outW; canvas.height = outH;
-      var ctx = canvas.getContext("2d");
-      var s = outW / FW;
+      photo.nw = nw; photo.nh = nh; // backfill for photos saved before nw/nh existed
       var dispW = nw * baseScale * zoom, dispH = nh * baseScale * zoom;
-      ctx.drawImage(img, offX * s, offY * s, dispW * s, dispH * s);
-      photo.src = canvas.toDataURL("image/jpeg", 0.82);
-      photo.fx = 50; photo.fy = 50; photo.zoom = 1;
+      photo.fx = dispW > FW ? Math.min(100, Math.max(0, ((-offX) / (dispW - FW)) * 100)) : 50;
+      photo.fy = dispH > FH ? Math.min(100, Math.max(0, ((-offY) / (dispH - FH)) * 100)) : 50;
+      photo.zoom = zoom;
       document.body.removeChild(overlay);
       onDone();
     });
@@ -542,17 +551,30 @@
     return btn;
   }
 
-  function thumbStyle(photos){
-    if (photos && photos.length && photos[0] && photos[0].src){
-      return {backgroundImage:"url("+photos[0].src+")", backgroundPosition:photos[0].fx+"% "+photos[0].fy+"%"};
+  /* Renders `photo` into `el`'s CSS background so it fills a boxW x boxH box
+     ("cover" behaviour) while respecting the user's chosen pan (fx/fy) and
+     zoom. Unlike plain `background-size:cover`, this lets the same photo be
+     framed consistently across differently-shaped boxes (square thumbnails,
+     the wide hero) using one set of fx/fy/zoom numbers — nothing is ever
+     cropped out of the saved image, so re-opening the crop editor later
+     always has room to pan. Photos saved before this existed have no
+     nw/nh yet and fall back to plain centered cover. */
+  function applyPhotoBox(el, photo, boxW, boxH){
+    if (!photo || !photo.src) return;
+    el.style.backgroundImage = "url(" + photo.src + ")";
+    if (!photo.nw || !photo.nh || !boxW || !boxH){
+      el.style.backgroundSize = "cover";
+      el.style.backgroundPosition = "center";
+      return;
     }
-    return null;
+    var scale = Math.max(boxW / photo.nw, boxH / photo.nh) * (photo.zoom || 1);
+    el.style.backgroundSize = (photo.nw * scale) + "px " + (photo.nh * scale) + "px";
+    el.style.backgroundPosition = (photo.fx==null?50:photo.fx) + "% " + (photo.fy==null?50:photo.fy) + "%";
   }
 
   function placeCard(p, showHeart){
     var thumb = h("div", {class:"place-thumb stripes"});
-    var st = thumbStyle(p.photos);
-    if (st) Object.assign(thumb.style, st);
+    if (p.photos[0]) applyPhotoBox(thumb, p.photos[0], 66, 66);
 
     var nameRow = h("div", {class:"place-name-row"}, [
       h("span", {class:"place-name", text:p.name})
@@ -770,8 +792,8 @@
     var photoCount = Math.max(p.photos.length, 1);
 
     var hero = h("div", {class:"hero stripes"});
-    var heroStyle = thumbStyle(p.photos);
-    if (heroStyle) Object.assign(hero.style, heroStyle);
+    function refreshHero(photo){ if (photo) applyPhotoBox(hero, photo, hero.clientWidth || 400, 250); }
+    requestAnimationFrame(function(){ refreshHero(p.photos[0]); });
     hero.appendChild(h("div", {class:"hero-topbar"}, [
       h("button", {class:"circle-btn", text:"‹", onclick:function(e){ e.stopPropagation(); backFromDetail(); }}),
       h("div", {style:{display:"flex", gap:"8px"}}, [
@@ -808,14 +830,12 @@
     for (var i=0;i<shown;i++){
       var t = h("div", {class:"gallery-thumb stripes" + (i===0?" sel":"")});
       if (p.photos[i]) {
-        t.style.backgroundImage = "url(" + p.photos[i].src + ")";
-        t.style.backgroundPosition = p.photos[i].fx + "% " + p.photos[i].fy + "%";
+        applyPhotoBox(t, p.photos[i], 52, 52);
         t.style.cursor = "pointer";
         (function(idx){
           t.addEventListener("click", function(){
             heroCounter.textContent = (idx+1) + " / " + photoCount;
-            hero.style.backgroundImage = "url(" + p.photos[idx].src + ")";
-            hero.style.backgroundPosition = p.photos[idx].fx + "% " + p.photos[idx].fy + "%";
+            refreshHero(p.photos[idx]);
             thumbs.forEach(function(th, thIdx){ th.classList.toggle("sel", thIdx === idx); });
           });
         })(i);
@@ -937,14 +957,14 @@
         var img = new Image();
         img.onerror = reject;
         img.onload = function(){
-          var maxDim = 960;
+          var maxDim = 1280;
           var scale = Math.min(1, maxDim / Math.max(img.width, img.height));
           var canvas = document.createElement("canvas");
           canvas.width = Math.round(img.width * scale);
           canvas.height = Math.round(img.height * scale);
           var ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL("image/jpeg", 0.72));
+          resolve({src: canvas.toDataURL("image/jpeg", 0.75), nw: canvas.width, nh: canvas.height});
         };
         img.src = reader.result;
       };
@@ -958,7 +978,7 @@
     var draft = editing ? {
       tab: editing.tab, name: editing.name, category: editing.category, region: editing.region,
       tagsText: editing.tags.join(", "), memo: editing.memo,
-      photos: editing.photos.map(function(ph){ return {src:ph.src, fx:ph.fx, fy:ph.fy, zoom:ph.zoom||1}; }),
+      photos: editing.photos.map(function(ph){ return {src:ph.src, nw:ph.nw, nh:ph.nh, fx:ph.fx, fy:ph.fy, zoom:ph.zoom||1}; }),
       links: editing.links.map(function(l){ return {icon:l.icon, label:l.label, url:l.url}; }),
       sub: editing.sub, addr: editing.addr, hours: editing.hours, access: editing.access,
       visitDate: editing.visitDate ? editing.visitDate.slice(0,10) : "",
@@ -987,7 +1007,8 @@
     function renderPhotoRow(){
       photoRow.innerHTML = "";
       draft.photos.forEach(function(photo, idx){
-        var t = h("div", {class:"photo-thumb", style:{backgroundImage:"url("+photo.src+")", backgroundPosition:photo.fx+"% "+photo.fy+"%"}});
+        var t = h("div", {class:"photo-thumb"});
+        applyPhotoBox(t, photo, 64, 64);
         if (idx === 0) t.appendChild(h("span", {class:"photo-badge", text:"대표"}));
         var removeBtn = h("button", {class:"photo-remove", text:"✕"});
         removeBtn.addEventListener("click", function(e){
@@ -1008,7 +1029,7 @@
     fileInput.addEventListener("change", function(){
       var files = Array.prototype.slice.call(fileInput.files || []);
       Promise.all(files.map(compressImage)).then(function(list){
-        draft.photos = draft.photos.concat(list.map(function(src){ return {src:src, fx:50, fy:50, zoom:1}; }));
+        draft.photos = draft.photos.concat(list.map(function(r){ return {src:r.src, nw:r.nw, nh:r.nh, fx:50, fy:50, zoom:1}; }));
         renderPhotoRow();
       });
       fileInput.value = "";
