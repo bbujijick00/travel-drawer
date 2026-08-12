@@ -191,7 +191,25 @@
   .photo-row{display:flex; gap:10px; overflow-x:auto; padding-bottom:2px;}
   .photo-thumb{width:64px; height:64px; border-radius:12px; background-size:cover; background-position:center; position:relative; flex-shrink:0;}
   .photo-badge{position:absolute; top:-6px; left:4px; background:var(--accent); color:#fff; font-size:9px; font-weight:700; padding:2px 6px; border-radius:20px;}
+  .photo-remove{position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; background:rgba(43,39,36,.75); color:#fff; font-size:11px; display:flex; align-items:center; justify-content:center;}
   .photo-add{width:64px; height:64px; border-radius:12px; border:1.5px dashed var(--border-alt); display:flex; align-items:center; justify-content:center; color:var(--text-fainter); font-size:18px; flex-shrink:0;}
+  .status-row{display:flex; gap:7px;}
+
+  /* action sheet ("...") */
+  .sheet-overlay{position:fixed; inset:0; background:rgba(43,39,36,.4); display:flex; align-items:flex-end; justify-content:center; z-index:100;}
+  .sheet-card{width:100%; max-width:430px; background:var(--surface); border-radius:20px 20px 0 0; padding:10px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column;}
+  .sheet-item{padding:14px 0; font-size:15px; font-weight:700; text-align:center; color:var(--text-body); border-bottom:1px solid var(--sub2);}
+  .sheet-item:last-child{border-bottom:none;}
+  .sheet-item.danger{color:var(--status-closed-fg);}
+  .sheet-item.cancel{color:var(--text-faint); font-weight:600; margin-top:6px;}
+
+  /* photo focus/position editor */
+  .focus-overlay{position:fixed; inset:0; background:rgba(20,18,16,.75); display:flex; align-items:center; justify-content:center; z-index:200; padding:24px;}
+  .focus-card{background:var(--surface); border-radius:20px; padding:18px; width:100%; max-width:320px; display:flex; flex-direction:column; align-items:center; gap:14px;}
+  .focus-title{font-size:13px; font-weight:800; color:var(--text-strong);}
+  .focus-frame{width:260px; height:260px; max-width:100%; border-radius:16px; overflow:hidden; background-size:cover; touch-action:none; cursor:grab; box-shadow:inset 0 0 0 1.5px var(--border-alt);}
+  .focus-hint{font-size:11.5px; color:var(--text-faint); text-align:center;}
+  .focus-done{width:100%; background:var(--accent); color:#fff; font-weight:800; font-size:14px; padding:12px 0; border-radius:12px;}
   .cat-row{display:flex; gap:7px; flex-wrap:wrap;}
   .region-field-row{display:flex; align-items:center; gap:8px;}
   .region-field-row button{font-size:11px; font-weight:700; color:var(--text-secondary); white-space:nowrap;}
@@ -277,10 +295,24 @@
     ];
   }
 
+  /* photos used to be plain dataURL strings; normalize old saves to {src,fx,fy}. */
+  function normalizePhoto(ph){
+    if (typeof ph === "string") return {src: ph, fx:50, fy:50};
+    return {src: ph.src, fx: (ph.fx==null?50:ph.fx), fy: (ph.fy==null?50:ph.fy)};
+  }
+  function normalizePlace(p){
+    p.photos = (p.photos || []).map(normalizePhoto);
+    return p;
+  }
+
   function loadState(){
     try{
       var raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw){
+        var parsed = JSON.parse(raw);
+        parsed.places = (parsed.places || []).map(normalizePlace);
+        return parsed;
+      }
     }catch(e){}
     var fresh = {places: seedPlaces()};
     saveState(fresh);
@@ -291,7 +323,73 @@
   }
 
   var state = loadState();
-  var nav = {tab:"wish", view:"folders", filter:{type:"all"}, selectedId:null, prevView:"folders", addTab:"wish"};
+  var nav = {tab:"wish", view:"folders", filter:{type:"all"}, selectedId:null, prevView:"folders", addTab:"wish", editId:null};
+
+  /* ---------- small overlays: action sheet + photo focus editor ---------- */
+  function showActionSheet(items){
+    var overlay = h("div", {class:"sheet-overlay"});
+    var card = h("div", {class:"sheet-card"});
+    items.forEach(function(item){
+      var btn = h("button", {class:"sheet-item" + (item.danger?" danger":""), text:item.label});
+      btn.addEventListener("click", function(){
+        document.body.removeChild(overlay);
+        item.onClick();
+      });
+      card.appendChild(btn);
+    });
+    var cancelBtn = h("button", {class:"sheet-item cancel", text:"취소"});
+    cancelBtn.addEventListener("click", function(){ document.body.removeChild(overlay); });
+    card.appendChild(cancelBtn);
+    overlay.appendChild(card);
+    overlay.addEventListener("click", function(e){ if (e.target === overlay) document.body.removeChild(overlay); });
+    document.body.appendChild(overlay);
+  }
+
+  function openFocusEditor(photo, onDone){
+    var overlay = h("div", {class:"focus-overlay"});
+    var frame = h("div", {class:"focus-frame", style:{
+      backgroundImage:"url("+photo.src+")",
+      backgroundPosition:photo.fx+"% "+photo.fy+"%"
+    }});
+    var doneBtn = h("button", {class:"focus-done", text:"완료"});
+    var card = h("div", {class:"focus-card"}, [
+      h("div", {class:"focus-title", text:"보여줄 부분 조정"}),
+      frame,
+      h("div", {class:"focus-hint", text:"드래그해서 위치를 옮겨보세요"}),
+      doneBtn
+    ]);
+    overlay.appendChild(card);
+
+    var dragging = false, lastX = 0, lastY = 0;
+    function applyDelta(dx, dy){
+      var rect = frame.getBoundingClientRect();
+      photo.fx = Math.min(100, Math.max(0, photo.fx - (dx / rect.width) * 100));
+      photo.fy = Math.min(100, Math.max(0, photo.fy - (dy / rect.height) * 100));
+      frame.style.backgroundPosition = photo.fx + "% " + photo.fy + "%";
+    }
+    function start(e){ dragging = true; var pt = e.touches ? e.touches[0] : e; lastX = pt.clientX; lastY = pt.clientY; }
+    function move(e){
+      if (!dragging) return;
+      var pt = e.touches ? e.touches[0] : e;
+      applyDelta(pt.clientX - lastX, pt.clientY - lastY);
+      lastX = pt.clientX; lastY = pt.clientY;
+      if (e.cancelable) e.preventDefault();
+    }
+    function end(){ dragging = false; }
+    frame.addEventListener("touchstart", start, {passive:true});
+    frame.addEventListener("touchmove", move, {passive:false});
+    frame.addEventListener("touchend", end);
+    frame.addEventListener("mousedown", start);
+    frame.addEventListener("mousemove", move);
+    frame.addEventListener("mouseup", end);
+    frame.addEventListener("mouseleave", end);
+
+    doneBtn.addEventListener("click", function(){
+      document.body.removeChild(overlay);
+      onDone();
+    });
+    document.body.appendChild(overlay);
+  }
 
   /* ---------- DOM helper ---------- */
   function h(tag, attrs, children){
@@ -335,7 +433,9 @@
   }
 
   function thumbStyle(photos){
-    if (photos && photos.length) return {backgroundImage:"url("+photos[0]+")"};
+    if (photos && photos.length && photos[0] && photos[0].src){
+      return {backgroundImage:"url("+photos[0].src+")", backgroundPosition:photos[0].fx+"% "+photos[0].fy+"%"};
+    }
     return null;
   }
 
@@ -565,11 +665,16 @@
       h("div", {style:{display:"flex", gap:"8px"}}, [
         h("button", {class:"circle-btn accent", text:"↻", onclick:function(){ p.status="open"; p.lastCheckedAt=new Date().toISOString(); persistAndRender(); }}),
         h("button", {class:"circle-btn", text:"⋯", onclick:function(){
-          if (confirm("'" + p.name + "'을(를) 삭제할까요?\n삭제하면 되돌릴 수 없어요.")){
-            state.places = state.places.filter(function(x){ return x.id !== p.id; });
-            nav.view = "list";
-            persistAndRender();
-          }
+          showActionSheet([
+            {label:"수정하기", onClick:function(){ openEdit(p.id); }},
+            {label:"삭제하기", danger:true, onClick:function(){
+              if (confirm("'" + p.name + "'을(를) 삭제할까요?\n삭제하면 되돌릴 수 없어요.")){
+                state.places = state.places.filter(function(x){ return x.id !== p.id; });
+                nav.view = "list";
+                persistAndRender();
+              }
+            }}
+          ]);
         }})
       ])
     ]));
@@ -579,7 +684,10 @@
     var shown = Math.min(photoCount, 4);
     for (var i=0;i<shown;i++){
       var t = h("div", {class:"gallery-thumb stripes" + (i===0?" sel":"")});
-      if (p.photos[i]) t.style.backgroundImage = "url(" + p.photos[i] + ")";
+      if (p.photos[i]) {
+        t.style.backgroundImage = "url(" + p.photos[i].src + ")";
+        t.style.backgroundPosition = p.photos[i].fx + "% " + p.photos[i].fy + "%";
+      }
       if (i === shown-1 && photoCount > 4) t.appendChild(h("div", {class:"gallery-overflow", text:"+" + (photoCount-4)}));
       galleryRow.appendChild(t);
     }
@@ -677,9 +785,10 @@
     return wrap;
   }
 
-  /* ---------- add screen ---------- */
-  function openAdd(){ nav.addTab = nav.tab; nav.prevView = nav.view; nav.view = "add"; render(); }
-  function closeAdd(){ nav.view = nav.prevView || "folders"; render(); }
+  /* ---------- add / edit screen ---------- */
+  function openAdd(){ nav.editId = null; nav.addTab = nav.tab; nav.prevView = nav.view; nav.view = "add"; render(); }
+  function openEdit(id){ nav.editId = id; nav.prevView = nav.view; nav.view = "add"; render(); }
+  function closeAdd(){ nav.editId = null; nav.view = nav.prevView || "folders"; render(); }
 
   function compressImage(file){
     return new Promise(function(resolve, reject){
@@ -705,14 +814,24 @@
   }
 
   function renderAdd(){
-    var draft = {
+    var editing = nav.editId ? findPlace(nav.editId) : null;
+
+    var draft = editing ? {
+      tab: editing.tab, name: editing.name, category: editing.category, region: editing.region,
+      tagsText: editing.tags.join(", "), memo: editing.memo,
+      photos: editing.photos.map(function(ph){ return {src:ph.src, fx:ph.fx, fy:ph.fy}; }),
+      links: editing.links.map(function(l){ return {icon:l.icon, label:l.label, url:l.url}; }),
+      sub: editing.sub, addr: editing.addr, hours: editing.hours, access: editing.access,
+      visitDate: editing.visitDate ? editing.visitDate.slice(0,10) : "",
+      status: editing.status
+    } : {
       tab: nav.addTab, name:"", category:"food", region:"", tagsText:"", memo:"",
-      photos:[], links:[]
+      photos:[], links:[], sub:"", addr:"", hours:"", access:"", visitDate:"", status:"open"
     };
 
     var header = h("div", {class:"add-header"}, [
       h("button", {class:"cancel", text:"취소", onclick:closeAdd}),
-      h("div", {class:"titlebar", text:"새 장소"}),
+      h("div", {class:"titlebar", text: editing ? "장소 수정" : "새 장소"}),
       h("button", {class:"save", text:"저장", onclick:function(){ doSave(); }})
     ]);
 
@@ -728,9 +847,19 @@
     var fileInput = h("input", {type:"file", accept:"image/*", multiple:"multiple", style:{display:"none"}});
     function renderPhotoRow(){
       photoRow.innerHTML = "";
-      draft.photos.forEach(function(src, idx){
-        var t = h("div", {class:"photo-thumb", style:{backgroundImage:"url("+src+")"}});
+      draft.photos.forEach(function(photo, idx){
+        var t = h("div", {class:"photo-thumb", style:{backgroundImage:"url("+photo.src+")", backgroundPosition:photo.fx+"% "+photo.fy+"%"}});
         if (idx === 0) t.appendChild(h("span", {class:"photo-badge", text:"대표"}));
+        var removeBtn = h("button", {class:"photo-remove", text:"✕"});
+        removeBtn.addEventListener("click", function(e){
+          e.stopPropagation();
+          draft.photos.splice(idx, 1);
+          renderPhotoRow();
+        });
+        t.appendChild(removeBtn);
+        t.addEventListener("click", function(){
+          openFocusEditor(photo, renderPhotoRow);
+        });
         photoRow.appendChild(t);
       });
       var addTile = h("div", {class:"photo-add", text:"+", onclick:function(){ fileInput.click(); }});
@@ -740,18 +869,18 @@
     fileInput.addEventListener("change", function(){
       var files = Array.prototype.slice.call(fileInput.files || []);
       Promise.all(files.map(compressImage)).then(function(list){
-        draft.photos = draft.photos.concat(list);
+        draft.photos = draft.photos.concat(list.map(function(src){ return {src:src, fx:50, fy:50}; }));
         renderPhotoRow();
       });
       fileInput.value = "";
     });
     var photoBlock = h("div", {}, [
-      h("div", {class:"field-label", text:"사진 · 첫 장이 대표 사진"}),
+      h("div", {class:"field-label", text:"사진 · 첫 장이 대표 사진 · 탭하면 위치 조정"}),
       photoRow, fileInput
     ]);
 
     // name
-    var nameInput = h("input", {type:"text", placeholder:"장소 이름을 입력해요", oninput:function(e){ draft.name = e.target.value; }});
+    var nameInput = h("input", {type:"text", placeholder:"장소 이름을 입력해요", value:draft.name, oninput:function(e){ draft.name = e.target.value; }});
     var nameBlock = h("div", {}, [ h("div", {class:"field-label", text:"장소 이름"}), h("div", {class:"field-box"}, [nameInput]) ]);
 
     // category
@@ -768,11 +897,42 @@
     var catBlock = h("div", {}, [ h("div", {class:"field-label", text:"종류"}), h("div", {class:"field-box"}, [catRow]) ]);
 
     // region
-    var regionInput = h("input", {type:"text", placeholder:"지역을 입력해요", oninput:function(e){ draft.region = e.target.value; }});
+    var regionInput = h("input", {type:"text", placeholder:"지역을 입력해요", value:draft.region, oninput:function(e){ draft.region = e.target.value; }});
     var regionBlock = h("div", {}, [ h("div", {class:"field-label", text:"지역"}), h("div", {class:"field-box region-field-row"}, [regionInput, h("button", {text:"📍 지도에서 찾기"})]) ]);
 
+    // subtitle
+    var subInput = h("input", {type:"text", placeholder:"예: 노포 · 냉면 전문", value:draft.sub, oninput:function(e){ draft.sub = e.target.value; }});
+    var subBlock = h("div", {}, [ h("div", {class:"field-label", text:"부제"}), h("div", {class:"field-box"}, [subInput]) ]);
+
+    // address / hours / access
+    var addrInput = h("input", {type:"text", placeholder:"주소를 입력해요", value:draft.addr, oninput:function(e){ draft.addr = e.target.value; }});
+    var addrBlock = h("div", {}, [ h("div", {class:"field-label", text:"주소"}), h("div", {class:"field-box"}, [addrInput]) ]);
+
+    var hoursInput = h("input", {type:"text", placeholder:"예: 11:00 - 21:00", value:draft.hours, oninput:function(e){ draft.hours = e.target.value; }});
+    var hoursBlock = h("div", {}, [ h("div", {class:"field-label", text:"영업시간"}), h("div", {class:"field-box"}, [hoursInput]) ]);
+
+    var accessInput = h("input", {type:"text", placeholder:"예: 을지로3가역 4번 출구 도보 3분", value:draft.access, oninput:function(e){ draft.access = e.target.value; }});
+    var accessBlock = h("div", {}, [ h("div", {class:"field-label", text:"가는 법"}), h("div", {class:"field-box"}, [accessInput]) ]);
+
+    // visit date
+    var visitDateInput = h("input", {type:"date", value:draft.visitDate, oninput:function(e){ draft.visitDate = e.target.value; }});
+    var visitDateBlock = h("div", {}, [ h("div", {class:"field-label", text:"방문일"}), h("div", {class:"field-box"}, [visitDateInput]) ]);
+
+    // status
+    var statusRow = h("div", {class:"status-row"});
+    function renderStatusRow(){
+      statusRow.innerHTML = "";
+      ["open","changed","closed"].forEach(function(s){
+        var chip = h("button", {class:"chip" + (draft.status===s?" active":""), text:STATUS_LABEL[s]});
+        chip.addEventListener("click", function(){ draft.status = s; renderStatusRow(); });
+        statusRow.appendChild(chip);
+      });
+    }
+    renderStatusRow();
+    var statusBlock = h("div", {}, [ h("div", {class:"field-label", text:"영업 상태"}), h("div", {class:"field-box"}, [statusRow]) ]);
+
     // tags
-    var tagsInput = h("input", {type:"text", placeholder:"쉼표로 구분해서 입력해요", oninput:function(e){ draft.tagsText = e.target.value; }});
+    var tagsInput = h("input", {type:"text", placeholder:"쉼표로 구분해서 입력해요", value:draft.tagsText, oninput:function(e){ draft.tagsText = e.target.value; }});
     var tagsBlock = h("div", {}, [ h("div", {class:"field-label", text:"태그"}), h("div", {class:"field-box"}, [tagsInput]) ]);
 
     // links
@@ -803,29 +963,45 @@
 
     // memo
     var memoInput = h("textarea", {rows:"3", placeholder:"메모를 남겨보세요", oninput:function(e){ draft.memo = e.target.value; }});
+    memoInput.value = draft.memo;
     var memoBlock = h("div", {}, [ h("div", {class:"field-label", text:"메모"}), h("div", {class:"field-box"}, [memoInput]) ]);
 
     function doSave(){
       if (!draft.name.trim()) { nameInput.focus(); return; }
       var tags = draft.tagsText.split(/[,\s]+/).map(function(s){return s.trim();}).filter(Boolean);
-      var place = {
-        id: uid(), tab: draft.tab, name: draft.name.trim(), category: draft.category, region: draft.region.trim(),
-        photos: draft.photos, tags: tags, links: draft.links,
-        status:"open", lastCheckedAt:null, sub:"", addr:"", hours:"", access:"", visitDate:null,
-        memo: draft.memo, isHearted:false, createdAt: new Date().toISOString()
-      };
-      state.places.push(place);
-      nav.tab = place.tab; nav.view = "folders"; nav.filter = {type:"all"};
-      persistAndRender();
+      var visitDateISO = draft.visitDate ? new Date(draft.visitDate + "T00:00:00").toISOString() : null;
+
+      if (editing){
+        editing.tab = draft.tab; editing.name = draft.name.trim(); editing.category = draft.category;
+        editing.region = draft.region.trim(); editing.photos = draft.photos; editing.tags = tags;
+        editing.links = draft.links; editing.sub = draft.sub.trim(); editing.addr = draft.addr.trim();
+        editing.hours = draft.hours.trim(); editing.access = draft.access.trim();
+        editing.visitDate = visitDateISO; editing.memo = draft.memo; editing.status = draft.status;
+        nav.editId = null;
+        nav.view = nav.prevView || "folders";
+        persistAndRender();
+      } else {
+        var place = {
+          id: uid(), tab: draft.tab, name: draft.name.trim(), category: draft.category, region: draft.region.trim(),
+          photos: draft.photos, tags: tags, links: draft.links,
+          status: draft.status, lastCheckedAt:null, sub: draft.sub.trim(), addr: draft.addr.trim(),
+          hours: draft.hours.trim(), access: draft.access.trim(), visitDate: visitDateISO,
+          memo: draft.memo, isHearted:false, createdAt: new Date().toISOString()
+        };
+        state.places.push(place);
+        nav.tab = place.tab; nav.view = "folders"; nav.filter = {type:"all"};
+        persistAndRender();
+      }
     }
 
     var saveBlock = h("div", {class:"save-block"}, [
-      h("button", {class:"save-cta", text:"서랍에 저장하기", onclick:doSave}),
+      h("button", {class:"save-cta", text: editing ? "수정 저장하기" : "서랍에 저장하기", onclick:doSave}),
       h("div", {class:"hint", text:"비워둔 항목은 나중에 채워도 돼요"})
     ]);
 
     var body = h("div", {class:"add-body"}, [
-      toggle, photoBlock, nameBlock, catBlock, regionBlock, tagsBlock, linksBlock, memoBlock, saveBlock
+      toggle, photoBlock, nameBlock, catBlock, regionBlock, subBlock, addrBlock, hoursBlock, accessBlock,
+      visitDateBlock, statusBlock, tagsBlock, linksBlock, memoBlock, saveBlock
     ]);
 
     return h("div", {}, [header, body]);
