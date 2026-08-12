@@ -217,9 +217,9 @@
   .cat-row{display:flex; gap:7px; flex-wrap:wrap;}
   .region-field-row{display:flex; align-items:center; gap:8px;}
   .region-field-row button{font-size:11px; font-weight:700; color:var(--text-secondary); white-space:nowrap;}
-  .link-add-row{display:flex; gap:8px; align-items:center; margin-top:8px;}
-  .link-add-row input{background:var(--sub1); border-radius:8px; padding:8px 10px; font-size:11.5px;}
-  .link-add-row button{color:var(--accent); font-weight:700; font-size:12px; flex-shrink:0;}
+  .link-add-row{display:flex; flex-direction:column; gap:8px; margin-top:8px;}
+  .link-add-row input{background:var(--sub1); border-radius:8px; padding:10px 12px; font-size:13px; width:100%;}
+  .link-add-row button{align-self:flex-end; color:#fff; background:var(--accent); font-weight:700; font-size:12px; padding:8px 16px; border-radius:8px;}
   .removable-link{display:flex; align-items:center; gap:8px; margin-bottom:6px;}
   .removable-link .txt{flex:1; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .removable-link button{color:var(--text-fainter); font-size:15px;}
@@ -253,6 +253,13 @@
 
   function catMeta(key){ for (var i=0;i<CATS.length;i++){ if (CATS[i].key===key) return CATS[i]; } return CATS[0]; }
   function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : "id-"+Date.now()+"-"+Math.random().toString(16).slice(2)); }
+
+  /* A pasted share link without a scheme (e.g. "naver.me/abc123") would
+     otherwise be treated as relative to this app's own URL and silently
+     fail to open — default it to https. */
+  function normalizeUrl(u){
+    return /^https?:\/\//i.test(u) ? u : "https://" + u;
+  }
 
   function formatChecked(iso){
     if (!iso) return "확인 기록 없음";
@@ -1111,8 +1118,8 @@
     }
     renderLinksList();
     var addLinkBtn = h("button", {text:"추가", onclick:function(){
-      if (!linkURLInput.value) return;
-      draft.links.push({icon:"📝", label:linkLabelInput.value, url:linkURLInput.value});
+      if (!linkURLInput.value.trim()) return;
+      draft.links.push({icon:"📝", label:linkLabelInput.value.trim(), url:normalizeUrl(linkURLInput.value.trim())});
       linkLabelInput.value = ""; linkURLInput.value = "";
       renderLinksList();
     }});
@@ -1131,7 +1138,7 @@
       // a link typed but never confirmed with "추가" would otherwise be silently
       // dropped — pick it up automatically so saving always includes it.
       if (linkURLInput.value.trim()){
-        draft.links.push({icon:"📝", label:linkLabelInput.value.trim(), url:linkURLInput.value.trim()});
+        draft.links.push({icon:"📝", label:linkLabelInput.value.trim(), url:normalizeUrl(linkURLInput.value.trim())});
         linkLabelInput.value = ""; linkURLInput.value = "";
       }
       var tags = draft.tagsText.split(/[,\s]+/).map(function(s){return s.trim();}).filter(Boolean);
