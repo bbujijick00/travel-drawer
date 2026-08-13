@@ -799,8 +799,13 @@
     var photoCount = Math.max(p.photos.length, 1);
 
     var hero = h("div", {class:"hero stripes"});
-    function refreshHero(photo){ if (photo) applyPhotoBox(hero, photo, hero.clientWidth || 400, 250); }
-    requestAnimationFrame(function(){ refreshHero(p.photos[0]); });
+    /* hero always spans the shell's width (capped at 430px, see #shell), so we
+       can size it from the viewport synchronously — no need to wait for a
+       layout/paint pass to measure the mounted element, which previously
+       depended on requestAnimationFrame and silently never applied if that
+       frame got skipped (e.g. the tab briefly not visible). */
+    function refreshHero(photo){ if (photo) applyPhotoBox(hero, photo, Math.min(window.innerWidth, 430), 250); }
+    refreshHero(p.photos[0]);
     hero.appendChild(h("div", {class:"hero-topbar"}, [
       h("button", {class:"circle-btn", text:"‹", onclick:function(e){ e.stopPropagation(); backFromDetail(); }}),
       h("div", {style:{display:"flex", gap:"8px"}}, [
