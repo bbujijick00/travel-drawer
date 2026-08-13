@@ -1315,7 +1315,7 @@
   /* ---------- app-level bottom tab bar ---------- */
   function appTabBar(){
     return h("div", {class:"app-tabbar"}, [
-      h("div", {class:"tabbar-item active"}, [ h("span",{class:"ico",text:"▭"}), h("span",{text:"서랍"}) ]),
+      h("button", {class:"tabbar-item active", onclick:function(){ nav.view = "folders"; render(); }}, [ h("span",{class:"ico",text:"▭"}), h("span",{text:"서랍"}) ]),
       h("div", {class:"tabbar-item"}, [ h("span",{class:"ico",text:"○"}), h("span",{text:"탐색"}) ]),
       h("div", {class:"fab-wrap"}, [ h("button", {class:"fab", text:"+", onclick:openAdd}) ]),
       h("div", {class:"tabbar-item"}, [ h("span",{class:"ico",text:"◇"}), h("span",{text:"지도"}) ]),
