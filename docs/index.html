@@ -196,6 +196,25 @@
   .photo-add{width:64px; height:64px; border-radius:12px; border:1.5px dashed var(--border-alt); display:flex; align-items:center; justify-content:center; color:var(--text-fainter); font-size:18px; flex-shrink:0;}
   .status-row{display:flex; gap:7px;}
 
+  /* structured hours picker */
+  .hours-setup-btn{width:100%; background:var(--sub2); color:var(--text-secondary); font-weight:700; font-size:12.5px; padding:10px 0; border-radius:10px;}
+  .hours-legacy-text{font-size:12.5px; color:var(--text-body); margin-bottom:8px;}
+  .hours-mode-row{display:flex; gap:7px; margin-bottom:12px;}
+  .hours-day-row{display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--sub2);}
+  .hours-day-row:last-child{border-bottom:none;}
+  .hours-day-label{display:flex; align-items:center; font-size:12.5px; font-weight:700; color:var(--text-strong); gap:4px;}
+  .hours-day-label input[type="checkbox"]{width:15px; height:15px; accent-color:var(--accent);}
+  .hours-closed-tag{font-size:11.5px; color:var(--text-fainter); font-weight:700;}
+  .hours-time-pair{display:flex; align-items:center; gap:6px;}
+  .hours-time-pair input[type="time"]{background:var(--sub1); border-radius:8px; padding:5px 6px; font-size:12px; width:auto;}
+
+  /* live open/closed indicator on detail */
+  .open-now-row{display:flex; align-items:center; gap:7px; margin-bottom:12px;}
+  .open-now-dot{width:8px; height:8px; border-radius:50%; flex-shrink:0;}
+  .open-now-dot.open{background:var(--status-open-fg);}
+  .open-now-dot.closed{background:var(--text-fainter);}
+  .open-now-label{font-size:12.5px; font-weight:700; color:var(--text-strong);}
+
   /* action sheet ("...") */
   .sheet-overlay{position:fixed; inset:0; background:rgba(43,39,36,.4); display:flex; align-items:flex-end; justify-content:center; z-index:100;}
   .sheet-card{width:100%; max-width:430px; background:var(--surface); border-radius:20px 20px 0 0; padding:10px 16px calc(16px + env(safe-area-inset-bottom)); display:flex; flex-direction:column;}
@@ -267,6 +286,55 @@
     if (days < 1) return "오늘 확인";
     if (days === 1) return "1일 전 확인";
     return days + "일 전 확인";
+  }
+
+  /* ---------- structured business hours ---------- */
+  var DAY_KEYS = ["sun","mon","tue","wed","thu","fri","sat"];
+  var DAY_LABELS = {sun:"일", mon:"월", tue:"화", wed:"수", thu:"목", fri:"금", sat:"토"};
+
+  function defaultDaySchedule(){ return {closed:false, open:"09:00", close:"21:00"}; }
+  function defaultHours(){
+    return {
+      mode: "simple",
+      simple: {weekday: defaultDaySchedule(), weekend: defaultDaySchedule()},
+      perDay: {sun: defaultDaySchedule(), mon: defaultDaySchedule(), tue: defaultDaySchedule(),
+        wed: defaultDaySchedule(), thu: defaultDaySchedule(), fri: defaultDaySchedule(), sat: defaultDaySchedule()}
+    };
+  }
+  /* Accepts either the new structured object or an old freeform string (kept
+     as-is for places saved before this existed — those just can't drive the
+     live open/closed calculation until re-saved with the new picker). */
+  function isStructuredHours(h){ return h && typeof h === "object"; }
+
+  function scheduleForDay(hoursObj, dayIndex){
+    if (hoursObj.mode === "perday") return hoursObj.perDay[DAY_KEYS[dayIndex]];
+    var isWeekend = (dayIndex === 0 || dayIndex === 6);
+    return isWeekend ? hoursObj.simple.weekend : hoursObj.simple.weekday;
+  }
+
+  function computeOpenNow(hoursObj){
+    if (!isStructuredHours(hoursObj)) return null;
+    var now = new Date();
+    var today = scheduleForDay(hoursObj, now.getDay());
+    var nowMin = now.getHours() * 60 + now.getMinutes();
+    if (!today || today.closed) return {open:false, label:"오늘 휴무"};
+    var op = today.open.split(":").map(Number), cl = today.close.split(":").map(Number);
+    var openMin = op[0]*60+op[1], closeMin = cl[0]*60+cl[1];
+    var isOpen = closeMin <= openMin
+      ? (nowMin >= openMin || nowMin < closeMin) // crosses midnight
+      : (nowMin >= openMin && nowMin < closeMin);
+    return {open:isOpen, label: isOpen ? ("영업중 · " + today.close + "에 종료") : ("영업 종료 · " + today.open + "에 시작")};
+  }
+
+  function summarizeHours(hoursObj){
+    if (!hoursObj) return "";
+    if (!isStructuredHours(hoursObj)) return hoursObj; // legacy freeform string
+    function fmt(s){ return s.closed ? "휴무" : (s.open + " - " + s.close); }
+    if (hoursObj.mode === "simple"){
+      var wd = fmt(hoursObj.simple.weekday), we = fmt(hoursObj.simple.weekend);
+      return wd === we ? ("매일 " + wd) : ("평일 " + wd + " · 주말 " + we);
+    }
+    return DAY_KEYS.map(function(k){ return DAY_LABELS[k] + " " + fmt(hoursObj.perDay[k]); }).join(", ");
   }
 
   function seedPlaces(){
@@ -892,7 +960,14 @@
     }
 
     var infoRows = h("div", {class:"info-rows"});
-    [["주소",p.addr], ["영업시간",p.hours], ["가는 법",p.access]].forEach(function(pair){
+    var openNow = computeOpenNow(p.hours);
+    if (openNow){
+      infoRows.appendChild(h("div", {class:"open-now-row"}, [
+        h("span", {class:"open-now-dot " + (openNow.open ? "open" : "closed")}),
+        h("span", {class:"open-now-label", text: openNow.label})
+      ]));
+    }
+    [["주소",p.addr], ["영업시간", summarizeHours(p.hours)], ["가는 법",p.access]].forEach(function(pair){
       if (pair[1]) infoRows.appendChild(h("div", {class:"info-row"}, [ h("span",{class:"label",text:pair[0]}), h("span",{class:"value",text:pair[1]}) ]));
     });
     if (p.visitDate) infoRows.appendChild(h("div", {class:"info-row"}, [ h("span",{class:"label",text:"방문일"}), h("span",{class:"value",text:new Date(p.visitDate).toLocaleDateString("ko-KR")}) ]));
@@ -992,7 +1067,9 @@
       tagsText: editing.tags.join(", "), memo: editing.memo,
       photos: editing.photos.map(function(ph){ return {src:ph.src, nw:ph.nw, nh:ph.nh, fx:ph.fx, fy:ph.fy, zoom:ph.zoom||1}; }),
       links: editing.links.map(function(l){ return {icon:l.icon, label:l.label, url:l.url}; }),
-      sub: editing.sub, addr: editing.addr, hours: editing.hours, access: editing.access,
+      sub: editing.sub, addr: editing.addr,
+      hours: (editing.hours && typeof editing.hours === "object") ? JSON.parse(JSON.stringify(editing.hours)) : editing.hours,
+      access: editing.access,
       visitDate: editing.visitDate ? editing.visitDate.slice(0,10) : "",
       status: editing.status
     } : {
@@ -1080,8 +1157,57 @@
     var addrInput = h("input", {type:"text", placeholder:"주소를 입력해요", value:draft.addr, oninput:function(e){ draft.addr = e.target.value; }});
     var addrBlock = h("div", {}, [ h("div", {class:"field-label", text:"주소"}), h("div", {class:"field-box"}, [addrInput]) ]);
 
-    var hoursInput = h("input", {type:"text", placeholder:"예: 11:00 - 21:00", value:draft.hours, oninput:function(e){ draft.hours = e.target.value; }});
-    var hoursBlock = h("div", {}, [ h("div", {class:"field-label", text:"영업시간"}), h("div", {class:"field-box"}, [hoursInput]) ]);
+    var hoursContainer = h("div", {class:"field-box"});
+    function hoursDayRow(label, sched){
+      var closedCb = h("input", {type:"checkbox"});
+      closedCb.checked = !!sched.closed;
+      closedCb.addEventListener("change", function(){ sched.closed = closedCb.checked; renderHoursBlock(); });
+      var row = h("div", {class:"hours-day-row"}, [
+        h("label", {class:"hours-day-label"}, [closedCb, h("span", {text:" " + label})])
+      ]);
+      if (sched.closed){
+        row.appendChild(h("span", {class:"hours-closed-tag", text:"휴무"}));
+      } else {
+        var openInput = h("input", {type:"time", value:sched.open});
+        openInput.addEventListener("input", function(e){ sched.open = e.target.value; });
+        var closeInput = h("input", {type:"time", value:sched.close});
+        closeInput.addEventListener("input", function(e){ sched.close = e.target.value; });
+        row.appendChild(h("div", {class:"hours-time-pair"}, [openInput, h("span", {text:"~"}), closeInput]));
+      }
+      return row;
+    }
+    function renderHoursBlock(){
+      hoursContainer.innerHTML = "";
+      if (!draft.hours){
+        hoursContainer.appendChild(h("button", {class:"hours-setup-btn", text:"영업시간 설정하기", onclick:function(){
+          draft.hours = defaultHours();
+          renderHoursBlock();
+        }}));
+        return;
+      }
+      if (typeof draft.hours === "string"){
+        hoursContainer.appendChild(h("div", {class:"hours-legacy-text", text: draft.hours}));
+        hoursContainer.appendChild(h("button", {class:"hours-setup-btn", text:"새 방식으로 바꾸기", onclick:function(){
+          draft.hours = defaultHours();
+          renderHoursBlock();
+        }}));
+        return;
+      }
+      hoursContainer.appendChild(h("div", {class:"hours-mode-row"}, [
+        h("button", {class:"chip" + (draft.hours.mode==="simple"?" active":""), text:"간단히(평일/주말)", onclick:function(){ draft.hours.mode="simple"; renderHoursBlock(); }}),
+        h("button", {class:"chip" + (draft.hours.mode==="perday"?" active":""), text:"요일별로", onclick:function(){ draft.hours.mode="perday"; renderHoursBlock(); }})
+      ]));
+      if (draft.hours.mode === "simple"){
+        hoursContainer.appendChild(hoursDayRow("평일 (월-금)", draft.hours.simple.weekday));
+        hoursContainer.appendChild(hoursDayRow("주말 (토-일)", draft.hours.simple.weekend));
+      } else {
+        DAY_KEYS.forEach(function(k){
+          hoursContainer.appendChild(hoursDayRow(DAY_LABELS[k] + "요일", draft.hours.perDay[k]));
+        });
+      }
+    }
+    renderHoursBlock();
+    var hoursBlock = h("div", {}, [ h("div", {class:"field-label", text:"영업시간"}), hoursContainer ]);
 
     var accessInput = h("input", {type:"text", placeholder:"예: 을지로3가역 4번 출구 도보 3분", value:draft.access, oninput:function(e){ draft.access = e.target.value; }});
     var accessBlock = h("div", {}, [ h("div", {class:"field-label", text:"가는 법"}), h("div", {class:"field-box"}, [accessInput]) ]);
@@ -1148,12 +1274,13 @@
       }
       var tags = draft.tagsText.split(/[,\s]+/).map(function(s){return s.trim();}).filter(Boolean);
       var visitDateISO = draft.visitDate ? new Date(draft.visitDate + "T00:00:00").toISOString() : null;
+      var hoursOut = typeof draft.hours === "string" ? draft.hours.trim() : draft.hours;
 
       if (editing){
         editing.tab = draft.tab; editing.name = draft.name.trim(); editing.category = draft.category;
         editing.region = draft.region.trim(); editing.photos = draft.photos; editing.tags = tags;
         editing.links = draft.links; editing.sub = draft.sub.trim(); editing.addr = draft.addr.trim();
-        editing.hours = draft.hours.trim(); editing.access = draft.access.trim();
+        editing.hours = hoursOut; editing.access = draft.access.trim();
         editing.visitDate = visitDateISO; editing.memo = draft.memo; editing.status = draft.status;
         nav.editId = null;
         nav.view = nav.formReturnView || "folders";
@@ -1163,7 +1290,7 @@
           id: uid(), tab: draft.tab, name: draft.name.trim(), category: draft.category, region: draft.region.trim(),
           photos: draft.photos, tags: tags, links: draft.links,
           status: draft.status, lastCheckedAt:null, sub: draft.sub.trim(), addr: draft.addr.trim(),
-          hours: draft.hours.trim(), access: draft.access.trim(), visitDate: visitDateISO,
+          hours: hoursOut, access: draft.access.trim(), visitDate: visitDateISO,
           memo: draft.memo, isHearted:false, createdAt: new Date().toISOString()
         };
         state.places.push(place);
