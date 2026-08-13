@@ -567,7 +567,8 @@
      always has room to pan. Photos saved before this existed have no
      nw/nh yet and fall back to plain centered cover. */
   function applyPhotoBox(el, photo, boxW, boxH){
-    if (!photo || !photo.src) return;
+    console.log("[DEBUG] applyPhotoBox el=", el.className, "photo=", photo, "boxW=", boxW, "boxH=", boxH);
+    if (!photo || !photo.src) { console.log("[DEBUG] applyPhotoBox early return, photo or src missing"); return; }
     el.style.backgroundImage = "url(" + photo.src + ")";
     if (!photo.nw || !photo.nh || !boxW || !boxH){
       el.style.backgroundSize = "cover";
@@ -804,7 +805,11 @@
        layout/paint pass to measure the mounted element, which previously
        depended on requestAnimationFrame and silently never applied if that
        frame got skipped (e.g. the tab briefly not visible). */
-    function refreshHero(photo){ if (photo) applyPhotoBox(hero, photo, Math.min(window.innerWidth, 430), 250); }
+    function refreshHero(photo){
+      console.log("[DEBUG] refreshHero called with photo=", photo, "boxW=", Math.min(window.innerWidth, 430));
+      if (photo) applyPhotoBox(hero, photo, Math.min(window.innerWidth, 430), 250);
+      console.log("[DEBUG] hero.style.backgroundSize after=", hero.style.backgroundSize);
+    }
     refreshHero(p.photos[0]);
     hero.appendChild(h("div", {class:"hero-topbar"}, [
       h("button", {class:"circle-btn", text:"‹", onclick:function(e){ e.stopPropagation(); backFromDetail(); }}),
